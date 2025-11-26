@@ -44,7 +44,7 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
             {/* Dashboard Layout */}
             {/* <Route path="/TailAdmin" element={<AppLayout />}>
               <Route index element={<Home />} /> */}
-              <Route path="/TailAdmin/"
+              <Route path="/"
                   element={
                     <ProtectedRoute>
                       <AppLayout />
@@ -103,8 +103,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
             </Route>
 
             {/* Auth Layout */}
-            <Route path="/TailAdmin/signin" element={<SignIn />} />
-            <Route path="/TailAdmin/signup" element={<SignUp />} />
+            <Route path="signin" element={<SignIn />} />
+            <Route path="signup" element={<SignUp />} />
 
             {/* Fallback Route */}
             <Route path="*" element={<NotFound />} />
