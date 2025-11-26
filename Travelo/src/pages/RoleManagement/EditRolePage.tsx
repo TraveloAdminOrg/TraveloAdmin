@@ -34,7 +34,7 @@ const EditRolePage: React.FC = () => {
     // 👇 Here you can call your API for updating role
     // updateRoleAPI(roleData.id, updatedData);
 
-    navigate("/TailAdmin/RoleManagement"); // redirect back to table or wherever you wa nt
+    navigate("/RoleManagement"); // redirect back to table or wherever you wa nt
   };
 
   return (

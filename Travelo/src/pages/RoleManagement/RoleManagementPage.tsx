@@ -15,7 +15,7 @@ const RoleManagementPage: React.FC = () => {
     const navigate = useNavigate();
 
     const handleAdd = () => {
-      navigate("/TailAdmin/create-role-page");
+      navigate("/create-role-page");
       console.log("Navigate to Create Role Page");
     };
 

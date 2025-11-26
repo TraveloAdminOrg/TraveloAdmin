@@ -8,7 +8,7 @@ export default function UserMetaCard({}) {
     const navigate = useNavigate();
   const { id } = useParams();
     const handleHistoryClick = () => {
-        navigate(`/TailAdmin/UserProfile/${user.id}/history`);
+        navigate(`/UserProfile/${user.id}/history`);
     }
   // In a real app, you’d fetch driver data from your backend or state management
   // For now, let's mock the data (you can replace this later with API)

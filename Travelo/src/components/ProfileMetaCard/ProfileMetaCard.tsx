@@ -17,9 +17,9 @@ export default function ProfileMetaCard({ data, type }: ProfileMetaCardProps) {
 
   const handleButtonClick = () => {
     if (type === "driver") {
-      navigate(`/TailAdmin/DriverProfile/${data.id}/history`);
+      navigate(`/DriverProfile/${data.id}/history`);
     } else {
-      navigate(`/TailAdmin/AdminProfile/${data.id}`);
+      navigate(`/AdminProfile/${data.id}`);
     }
   };
 

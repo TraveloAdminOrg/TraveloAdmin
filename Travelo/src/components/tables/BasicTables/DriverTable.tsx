@@ -182,9 +182,9 @@ export default function DriverTable() {
                 <TableRow 
                 key={order.id}
                 onClick={() => {
-                console.log("Navigating to:", `/TailAdmin/DriverProfile/${order.id}`);
+                console.log("Navigating to:", `/DriverProfile/${order.id}`);
 
-                navigate(`/TailAdmin/DriverProfile/${order.id}`,{state: {driver: order}});
+                navigate(`/DriverProfile/${order.id}`,{state: {driver: order}});
                 }}
                 className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition"
                 >

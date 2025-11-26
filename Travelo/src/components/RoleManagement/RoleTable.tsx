@@ -39,7 +39,7 @@ export default function RoleTable() {
   const handleEdit = (id: number) => {
   const role = data.find((d) => d.id === id);
   if (role) {
-    navigate(`/TailAdmin/edit-role-page/${role.id}`, { state: { role } });
+    navigate(`/edit-role-page/${role.id}`, { state: { role } });
   }
 };
 //   const handleFormSubmit = (formData: any) => {
@@ -90,7 +90,7 @@ export default function RoleTable() {
                   key={item.id}
                   className="border-b border-gray-100 hover:bg-gray-50 transition"
                   onClick={() => {
-                    navigate(`/TailAdmin/AdminProfile/${item.id}`,{state: {driver: item}});
+                    navigate(`/AdminProfile/${item.id}`,{state: {driver: item}});
                 }}
                 >
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">{item.name}</td>

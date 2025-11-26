@@ -282,9 +282,9 @@ export default function UserTable() {
                 <TableRow 
                 key={order.id}
                 onClick={() => {
-                console.log("Navigating to:", `/TailAdmin/UserProfile/${order.id}`);
+                console.log("Navigating to:", `/UserProfile/${order.id}`);
 
-                navigate(`/TailAdmin/UserProfile/${order.id}`,{state: {user: order}});
+                navigate(`/UserProfile/${order.id}`,{state: {user: order}});
                 }}>
                   {/* Name + Image  */}
                   <TableCell className="px-5 py-4 text-start">

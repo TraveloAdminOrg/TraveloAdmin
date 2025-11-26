@@ -11,8 +11,8 @@
   import Buttons from "./pages/UiElements/Buttons";
   import LineChart from "./pages/UiElements/LineChart";
   import PayChart from "./pages/Payment/PaymentBarChart";
-  import Calendar from "./pages/Calendar";
-  import FormElements from "./pages/Forms/FormElements";
+  // import Calendar from "./pages/Calendar";
+  // import FormElements from "./pages/Forms/FormElements";
   import Blank from "./pages/Blank";
   import AppLayout from "./layout/AppLayout";
   import { ScrollToTop } from "./components/common/ScrollToTop";
@@ -44,8 +44,7 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
             {/* Dashboard Layout */}
             {/* <Route path="/TailAdmin" element={<AppLayout />}>
               <Route index element={<Home />} /> */}
-              <Route path="/"
-                  element={
+              <Route path="/" element={
                     <ProtectedRoute>
                       <AppLayout />
                     </ProtectedRoute>
@@ -103,8 +102,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
             </Route>
 
             {/* Auth Layout */}
-            <Route path="signin" element={<SignIn />} />
-            <Route path="signup" element={<SignUp />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
 
             {/* Fallback Route */}
             <Route path="*" element={<NotFound />} />
