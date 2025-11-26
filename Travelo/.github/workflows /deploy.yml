@@ -1,5 +1,4 @@
-#
-name: Build and Deploy (DEV Only)
+name: Build and Deploy
 
 on:
   push:
@@ -12,10 +11,9 @@ jobs:
     container:
       image: node:22
       options: --memory=4096m
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-1
+
+    environment:
+      name: production
 
     steps:
       - name: Checkout code
@@ -30,40 +28,37 @@ jobs:
           unzip awscliv2.zip
           ./aws/install
 
-      - name: Set DEV environment vars
-        run: |
-          echo "Using DEV environment"
-          echo "S3_BUCKET=happyhour-dev-bucket" >> $GITHUB_ENV
-          echo "CF_DIST_ID=E1UBYQQZBOFPK4" >> $GITHUB_ENV
-          echo "ENVIRONMENT=dev" >> $GITHUB_ENV
-          echo "S3_ENV_PATH=s3://happyhour-env-bucket/fe-dev-env/env" >> $GITHUB_ENV
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-      - name: Download environment file from S3
+      - name: Set environment vars
         run: |
-          aws s3 cp ${{ env.S3_ENV_PATH }} .
-          mv env .env
-
-      - name: Remove package-lock.json and node_modules and dist
-        run: |
-          rm -f package-lock.json
-          rm -rf node_modules
-          rm -rf dist
+          echo "S3_BUCKET=travelo-fe-bucket" >> $GITHUB_ENV
+          echo "CF_DIST_ID=E2OT941MRDL1BB" >> $GITHUB_ENV
 
       - name: Install Node dependencies
-        run: npm install
+        working-directory: Travelo
+        run: npm ci
 
       - name: Build project
+        working-directory: Travelo
         run: npm run build
 
       - name: Verify files to deploy
+        working-directory: Travelo
         run: ls -la dist/
 
       - name: Upload to S3
+        working-directory: Travelo
         run: |
-          echo "Uploading files to $S3_BUCKET"
+          echo "Uploading to $S3_BUCKET"
           aws s3 cp dist/ s3://$S3_BUCKET/ --recursive
 
       - name: Invalidate CloudFront cache
         run: |
-          echo "Invalidating CloudFront distribution $CF_DIST_ID"
+          echo "Invalidating CloudFront"
           aws cloudfront create-invalidation --distribution-id $CF_DIST_ID --paths "/*"
