@@ -1,342 +1,376 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-import CmsIcon from "../icons/cms-25.png";
-import { Wallet } from "lucide-react";
-import { UserCog } from "lucide-react";
-// Assume these icons are imported from an icon library
 import {
-  // BoxCubeIcon,
-  // CalenderIcon,
-  ChevronDownIcon,
-  GridIcon,
-  HorizontaLDots,
-  // ListIcon,
-  // PieChartIcon,
-  // PlugInIcon,
-  TableIcon,
-  // UserCircleIcon,
-  DollarLineIcon,
-  HelpIcon
-} from "../icons";
+  Wallet,
+  Car,
+  Users,
+  User as UserIcon,
+  Map as MapIcon,
+  Star,
+  Bell,
+  Megaphone,
+  ShieldCheck,
+  Route as RouteIcon,
+  BarChart3,
+  LayoutDashboard,
+  FileText,
+  HelpCircle,
+  UserCog,
+  ChevronRight,
+} from "lucide-react";
 import { useSidebar } from "../context/SidebarContext";
-// import SidebarWidget from "./SidebarWidget";
+import { useAuth } from "../context/AuthContext";
+import { useReportOverviewQuery } from "../hooks/queries/useReports";
+import { useActiveDispatchRidesQuery } from "../hooks/queries/useDispatch";
 
-type NavItem = {
+const FALLBACK_AVATAR = "/images/user/owner.jpg";
+
+type Tone = "brand" | "warning" | "success" | "neutral";
+
+interface NavItem {
   name: string;
   icon: React.ReactNode;
-  path?: string;
-  subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
-};
+  path: string;
+  badgeKey?: "pendingApprovals" | "activeRides";
+  badgeTone?: Tone;
+}
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    icon: <GridIcon />,
-     name: "Dashboard", path: "/"
-  },
-  {
-    name: "Community",
-    icon: <TableIcon />,
-    subItems: [
-      { name: "Users", path: "basic-tables", pro: false },
-      { name: "Drivers", path: "driver-tables", pro: false },
+    title: "Overview",
+    items: [
+      { name: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/" },
+      {
+        name: "Live Dispatch",
+        icon: <MapIcon size={20} />,
+        path: "/live-dispatch",
+        badgeKey: "activeRides",
+        badgeTone: "success",
+      },
+      { name: "Reports", icon: <BarChart3 size={20} />, path: "/reports" },
     ],
   },
   {
-    name: "Payments",
-    icon: <DollarLineIcon />,
-    subItems: [
-      { name: "Details", path: "payment-chart", pro: false },
-      { name: "History", path: "transaction-history", pro: false }
+    title: "Operations",
+    items: [
+      { name: "Rides", icon: <RouteIcon size={20} />, path: "/rides" },
+      {
+        name: "Driver Approvals",
+        icon: <ShieldCheck size={20} />,
+        path: "/driver-approvals",
+        badgeKey: "pendingApprovals",
+        badgeTone: "warning",
+      },
     ],
   },
   {
-    name: "Fare Management",
-    icon: <Wallet />,
-    path: "fare-management",
+    title: "People",
+    items: [
+      { name: "Drivers", icon: <Users size={20} />, path: "/driver-tables" },
+      { name: "Users", icon: <UserIcon size={20} />, path: "/basic-tables" },
+    ],
   },
   {
-    name: "Content Management",
-    icon: <img src={CmsIcon} alt="Content Management" />,
-    path: "content-management",
+    title: "Revenue",
+    items: [
+      {
+        name: "Payments & Transactions",
+        icon: <Wallet size={20} />,
+        path: "/transaction-history",
+      },
+      {
+        name: "Fare Management",
+        icon: <Wallet size={20} />,
+        path: "/fare-management",
+      },
+      { name: "Ride Types", icon: <Car size={20} />, path: "/ride-types" },
+    ],
   },
   {
-    name: "Help and Support",
-    icon: <HelpIcon />,
-    path: "help-support",
+    title: "Engagement",
+    items: [
+      { name: "Reviews & Ratings", icon: <Star size={20} />, path: "/reviews" },
+      { name: "Notifications", icon: <Bell size={20} />, path: "/notifications" },
+      { name: "Adverts", icon: <Megaphone size={20} />, path: "/adverts" },
+    ],
   },
   {
-    name: "Role Management",
-    icon: <UserCog />,
-    path: "role-management",
-  }
-
+    title: "Configuration",
+    items: [
+      {
+        name: "Content Management",
+        icon: <FileText size={20} />,
+        path: "/content-management",
+      },
+      {
+        name: "Help and Support",
+        icon: <HelpCircle size={20} />,
+        path: "/help-support",
+      },
+      {
+        name: "Role Management",
+        icon: <UserCog size={20} />,
+        path: "/role-management",
+      },
+    ],
+  },
 ];
 
-
+const TONE_BADGE: Record<Tone, string> = {
+  brand:
+    "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
+  warning:
+    "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
+  success:
+    "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400",
+  neutral: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
+};
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const location = useLocation();
+  const { admin } = useAuth();
 
-  const [openSubmenu, setOpenSubmenu] = useState<{
-    type: "main" ;
-    index: number;
-  } | null>(null);
-  const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
-    {}
-  );
-  const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const overviewQ = useReportOverviewQuery({});
+  const activeRidesQ = useActiveDispatchRidesQuery();
 
-  // const isActive = (path: string) => location.pathname === path;
+  const collapsed = !isExpanded && !isHovered && !isMobileOpen;
+
   const isActive = useCallback(
-    (path: string) => location.pathname === path,
-    [location.pathname]
+    (path: string) => {
+      if (path === "/") return location.pathname === "/";
+      return (
+        location.pathname === path || location.pathname.startsWith(path + "/")
+      );
+    },
+    [location.pathname],
   );
 
-  useEffect(() => {
-    let submenuMatched = false;
-    ["main"].forEach((menuType) => {
-      const items =  navItems 
-      items.forEach((nav, index) => {
-        if (nav.subItems) {
-          nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
-              setOpenSubmenu({
-                type: menuType as "main",
-                index,
-              });
-              submenuMatched = true;
-            }
-          });
-        }
-      });
-    });
-
-    if (!submenuMatched) {
-      setOpenSubmenu(null);
-    }
-  }, [location, isActive]);
-
-  useEffect(() => {
-    if (openSubmenu !== null) {
-      const key = `${openSubmenu.type}-${openSubmenu.index}`;
-      if (subMenuRefs.current[key]) {
-        setSubMenuHeight((prevHeights) => ({
-          ...prevHeights,
-          [key]: subMenuRefs.current[key]?.scrollHeight || 0,
-        }));
-      }
-    }
-  }, [openSubmenu]);
-
-  const handleSubmenuToggle = (index: number, menuType: "main" ) => {
-    setOpenSubmenu((prevOpenSubmenu) => {
-      if (
-        prevOpenSubmenu &&
-        prevOpenSubmenu.type === menuType &&
-        prevOpenSubmenu.index === index
-      ) {
-        return null;
-      }
-      return { type: menuType, index };
-    });
+  const badges: Record<NonNullable<NavItem["badgeKey"]>, number> = {
+    pendingApprovals: overviewQ.data?.pendingApprovals ?? 0,
+    activeRides: activeRidesQ.data?.length ?? 0,
   };
 
-  const renderMenuItems = (items: NavItem[], menuType: "main" ) => (
-    <ul className="flex flex-col gap-4">
-      {items.map((nav, index) => (
-        <li key={nav.name}>
-          {nav.subItems ? (
-            <button
-              onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group ${
-                openSubmenu?.type === menuType && openSubmenu?.index === index
-                  ? "menu-item-active"
-                  : "menu-item-inactive"
-              } cursor-pointer ${
-                !isExpanded && !isHovered
-                  ? "lg:justify-center"
-                  : "lg:justify-start"
-              }`}
-            >
-              <span
-                className={`menu-item-icon-size  ${
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? "menu-item-icon-active"
-                    : "menu-item-icon-inactive"
-                }`}
-              >
-                {nav.icon}
-              </span>
-              {(isExpanded || isHovered || isMobileOpen) && (
-                <span className="menu-item-text">{nav.name}</span>
-              )}
-              {(isExpanded || isHovered || isMobileOpen) && (
-                <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${
-                    openSubmenu?.type === menuType &&
-                    openSubmenu?.index === index
-                      ? "rotate-180 text-brand-500"
-                      : ""
-                  }`}
-                />
-              )}
-            </button>
-          ) : (
-            nav.path && (
-              <Link
-                to={nav.path}
-                className={`menu-item group ${
-                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
-                }`}
-              >
-                <span
-                  className={`menu-item-icon-size ${
-                    isActive(nav.path)
-                      ? "menu-item-icon-active"
-                      : "menu-item-icon-inactive"
-                  }`}
-                >
-                  {nav.icon}
-                </span>
-                {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className="menu-item-text">{nav.name}</span>
-                )}
-              </Link>
-            )
-          )}
-          {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
-            <div
-              ref={(el) => {
-                subMenuRefs.current[`${menuType}-${index}`] = el;
-              }}
-              className="overflow-hidden transition-all duration-300"
-              style={{
-                height:
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? `${subMenuHeight[`${menuType}-${index}`]}px`
-                    : "0px",
-              }}
-            >
-              <ul className="mt-2 space-y-1 ml-9">
-                {nav.subItems.map((subItem) => (
-                  <li key={subItem.name}>
-                    <Link
-                      to={subItem.path}
-                      className={`menu-dropdown-item ${
-                        isActive(subItem.path)
-                          ? "menu-dropdown-item-active"
-                          : "menu-dropdown-item-inactive"
-                      }`}
-                    >
-                      {subItem.name}
-                      <span className="flex items-center gap-1 ml-auto">
-                        {subItem.new && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge`}
-                          >
-                            new
-                          </span>
-                        )}
-                        {subItem.pro && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge`}
-                          >
-                            pro
-                          </span>
-                        )}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
+  const adminName = (admin?.email ?? "").split("@")[0] || "Admin";
+  const adminType = admin?.type;
+
+  // Keep submenu state machinery so we don't break the original API surface,
+  // but the new design uses a flat-grouped layout.
+  const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  useEffect(() => {
+    void subMenuRefs.current;
+  }, [location]);
+
+  // Track if the user is hovering a row (for tooltip behavior when collapsed)
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
+      className={`fixed left-0 top-0 z-50 mt-16 flex h-screen flex-col bg-white px-4 text-gray-900 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 lg:mt-0
+        border-r border-gray-200
         ${
           isExpanded || isMobileOpen
             ? "w-[290px]"
             : isHovered
-            ? "w-[290px]"
-            : "w-[90px]"
+              ? "w-[290px]"
+              : "w-[90px]"
         }
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setHoveredItem(null);
+      }}
     >
+      {/* Logo */}
       <div
-        className={`py-8 flex ${
-          !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+        className={`flex items-center py-6 ${
+          collapsed ? "justify-center" : "justify-start"
         }`}
       >
-        <Link to="/">
-          {isExpanded || isHovered || isMobileOpen ? (
+        <Link to="/" className="flex items-center gap-2">
+          {!collapsed ? (
             <>
               <img
                 className="dark:hidden"
                 src="images/logo/logo-sidebar.png"
-                alt="Logo"
-                width={150}
-                height={40}
+                alt="Travelo"
+                width={140}
+                height={36}
               />
               <img
                 className="hidden dark:block"
                 src="./images/logo/logo-sidebar.png"
-                alt="Logo"
-                width={150}
-                height={40}
+                alt="Travelo"
+                width={140}
+                height={36}
               />
             </>
           ) : (
             <img
               src="./images/logo/logo-responsive2.png"
-              alt="Logo"
-              width={42}
-              height={42}
+              alt="Travelo"
+              width={40}
+              height={40}
             />
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
-        <nav className="mb-6">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-900 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Menu"
-                ) : (
-                  <HorizontaLDots className="size-6" />
+
+      {/* Nav */}
+      <nav className="no-scrollbar flex-1 overflow-y-auto pb-4">
+        <ul className="flex flex-col gap-5">
+          {NAV_GROUPS.map((group) => (
+            <li key={group.title}>
+              {!collapsed ? (
+                <h3 className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
+                  {group.title}
+                </h3>
+              ) : (
+                <div className="mx-auto mb-2 h-px w-6 bg-gray-200 dark:bg-gray-800" />
+              )}
+              <ul className="flex flex-col gap-1">
+                {group.items.map((item) => {
+                  const active = isActive(item.path);
+                  const badge =
+                    item.badgeKey && badges[item.badgeKey] > 0
+                      ? badges[item.badgeKey]
+                      : 0;
+                  return (
+                    <li
+                      key={item.path}
+                      className="relative"
+                      onMouseEnter={() => setHoveredItem(item.path)}
+                      onMouseLeave={() => setHoveredItem(null)}
+                    >
+                      {/* Active accent bar */}
+                      {active && (
+                        <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-brand-500" />
+                      )}
+
+                      <Link
+                        to={item.path}
+                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                          active
+                            ? "bg-gradient-to-r from-brand-50 to-transparent text-brand-600 dark:from-brand-500/15 dark:text-brand-400"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white"
+                        } ${collapsed ? "justify-center" : ""}`}
+                      >
+                        <span
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all duration-200 ${
+                            active
+                              ? "bg-brand-500 text-white shadow-sm shadow-brand-500/20"
+                              : "bg-gray-100 text-gray-500 group-hover:bg-brand-50 group-hover:text-brand-600 dark:bg-gray-800 dark:text-gray-400 dark:group-hover:bg-brand-500/15 dark:group-hover:text-brand-400"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1 truncate">{item.name}</span>
+                            {badge > 0 && (
+                              <span
+                                className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold ${
+                                  TONE_BADGE[item.badgeTone ?? "brand"]
+                                }`}
+                              >
+                                {badge > 99 ? "99+" : badge}
+                              </span>
+                            )}
+                            {active && (
+                              <ChevronRight
+                                size={14}
+                                className="text-brand-500"
+                              />
+                            )}
+                          </>
+                        )}
+
+                        {/* Badge dot when collapsed */}
+                        {collapsed && badge > 0 && (
+                          <span
+                            className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full ${
+                              item.badgeTone === "warning"
+                                ? "bg-warning-500"
+                                : item.badgeTone === "success"
+                                  ? "bg-success-500"
+                                  : "bg-brand-500"
+                            } ring-2 ring-white dark:ring-gray-900`}
+                          />
+                        )}
+                      </Link>
+
+                      {/* Tooltip when collapsed */}
+                      {collapsed && hoveredItem === item.path && (
+                        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg dark:bg-gray-700">
+                          {item.name}
+                          {badge > 0 && (
+                            <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                              {badge}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* User mini-card */}
+      {admin && (
+        <div className="border-t border-gray-100 py-4 dark:border-gray-800">
+          {!collapsed ? (
+            <div className="flex items-center gap-3 rounded-xl p-2">
+              <div className="relative">
+                <div className="h-10 w-10 overflow-hidden rounded-full bg-gradient-to-br from-brand-400 to-brand-600 ring-2 ring-white dark:ring-gray-900">
+                  <img
+                    src={admin.image || FALLBACK_AVATAR}
+                    alt=""
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src =
+                        FALLBACK_AVATAR;
+                    }}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-success-500 dark:border-gray-900" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold capitalize text-gray-800 dark:text-white/90">
+                  {adminName}
+                </p>
+                {adminType && (
+                  <p className="truncate text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {adminType.replace(/_/g, " ")}
+                  </p>
                 )}
-              </h2>
-              {renderMenuItems(navItems, "main")}
+              </div>
             </div>
-            
-          </div>
-        </nav>
-        {/* {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null} */}
-      </div>
+          ) : (
+            <div className="mx-auto flex h-10 w-10 overflow-hidden rounded-full ring-2 ring-white dark:ring-gray-900">
+              <img
+                src={admin.image || FALLBACK_AVATAR}
+                alt=""
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = FALLBACK_AVATAR;
+                }}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 };

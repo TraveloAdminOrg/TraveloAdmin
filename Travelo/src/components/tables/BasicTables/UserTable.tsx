@@ -1,4 +1,4 @@
-import  { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -24,7 +24,7 @@ interface Order {
   status: string;
 }
 
- // Simplified table data
+// Simplified table data
 const tableData: Order[] = [
   {
     id: 1,
@@ -82,16 +82,16 @@ export default function UserTable() {
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [selectedCity, setSelectedCity] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
 
   const filteredData = tableData.filter((order) => {
-  return (
-    (selectedRegion === "All" || order.region === selectedRegion) &&
-    (selectedCity === "All" || order.city === selectedCity) &&
-    (selectedStatus === "All" || order.status === selectedStatus)
-  );
-});
+    return (
+      (selectedRegion === "All" || order.region === selectedRegion) &&
+      (selectedCity === "All" || order.city === selectedCity) &&
+      (selectedStatus === "All" || order.status === selectedStatus)
+    );
+  });
 
 
   return (
@@ -99,88 +99,48 @@ export default function UserTable() {
       <div className="max-w-full overflow-x-auto">
         <div className="min-w-[1102px]">
           <div className="flex gap-4 p-4">
-        {/* Region Filter */}
-        <select
-          value={selectedRegion}
-          onChange={(e) => setSelectedRegion(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Regions</option>
-          {[...new Set(tableData.map((d) => d.region))].map((region) => (
-            <option key={region} value={region}>
-              {region}
-            </option>
-          ))}
-        </select>
+            {/* Region Filter */}
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="All">All Regions</option>
+              {[...new Set(tableData.map((d) => d.region))].map((region) => (
+                <option key={region} value={region}>
+                  {region}
+                </option>
+              ))}
+            </select>
 
-        {/* City Filter */}
-        <select
-          value={selectedCity}
-          onChange={(e) => setSelectedCity(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Cities</option>
-          {[...new Set(tableData.map((d) => d.city))].map((city) => (
-            <option key={city} value={city}>
-              {city}
-            </option>
-          ))}
-        </select>
+            {/* Status Filter */}
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="appearance-none border border-gray-300 rounded-lg px-4 py-2 pr-10 text-sm bg-white dark:bg-gray-900 dark:text-white"
+            >
+              <option value="All">All Status</option>
+              {[...new Set(tableData.map((d) => d.status))].map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
 
-        {/* Status Filter */}
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Status</option>
-          {[...new Set(tableData.map((d) => d.status))].map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-        </div>
-        
 
 
           <Table>
-            {/* Table Header */}
-            {/* <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-              <TableRow>
-                <TableCell
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
-                  User
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
-                  Project Name
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
-                  Team
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
-                  Status
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                >
-                  Budget
-                </TableCell>
-              </TableRow>
-            </TableHeader> */}
-
             {/* Table Header */}
             <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
               <TableRow>
@@ -279,13 +239,13 @@ export default function UserTable() {
             {/* Table Body */}
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
               {filteredData.map((order) => (
-                <TableRow 
-                key={order.id}
-                onClick={() => {
-                console.log("Navigating to:", `/UserProfile/${order.id}`);
+                <TableRow
+                  key={order.id}
+                  onClick={() => {
+                    console.log("Navigating to:", `/UserProfile/${order.id}`);
 
-                navigate(`/UserProfile/${order.id}`,{state: {user: order}});
-                }}>
+                    navigate(`/UserProfile/${order.id}`, { state: { user: order } });
+                  }}>
                   {/* Name + Image  */}
                   <TableCell className="px-5 py-4 text-start">
                     <div className="flex items-center gap-3">
@@ -302,7 +262,7 @@ export default function UserTable() {
                         <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
                           {order.user.name}
                         </span>
-                        
+
                       </div>
                     </div>
                   </TableCell>
@@ -325,8 +285,8 @@ export default function UserTable() {
                         order.status === "Active"
                           ? "success"
                           : order.status === "Pending"
-                          ? "warning"
-                          : "error"
+                            ? "warning"
+                            : "error"
                       }
                     >
                       {order.status}

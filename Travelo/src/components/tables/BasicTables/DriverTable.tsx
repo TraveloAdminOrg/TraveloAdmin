@@ -1,4 +1,4 @@
-import  { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -85,71 +85,75 @@ export default function DriverTable() {
 
 
   const filteredData = tableData.filter((order) => {
-  return (
-    (selectedRegion === "All" || order.region === selectedRegion) &&
-    (selectedCity === "All" || order.city === selectedCity) &&
-    (selectedStatus === "All" || order.status === selectedStatus)
-  );
-});
-
- 
-
+    return (
+      (selectedRegion === "All" || order.region === selectedRegion) &&
+      (selectedCity === "All" || order.city === selectedCity) &&
+      (selectedStatus === "All" || order.status === selectedStatus)
+    );
+  });
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <div className="min-w-[1102px]">
           <div className="flex gap-4 p-4">
-        {/* Region Filter */}
-        <select
-          value={selectedRegion}
-          onChange={(e) => setSelectedRegion(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Regions</option>
-          {[...new Set(tableData.map((d) => d.region))].map((region) => (
-            <option key={region} value={region}>
-              {region}
-            </option>
-          ))}
-        </select>
+            {/* Region Filter */}
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="appearance-none border border-gray-300 rounded-lg px-4 py-2 pr-10 text-sm bg-white dark:bg-gray-900 dark:text-white"
+            >
+              <option value="All">All Regions</option>
+              {[...new Set(tableData.map((d) => d.region))].map((region) => (
+                <option key={region} value={region}>
+                  {region}
+                </option>
+              ))}
+            </select>
+            {/* Custom Arrow */}
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
 
-        {/* City Filter */}
-        <select
-          value={selectedCity}
-          onChange={(e) => setSelectedCity(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Cities</option>
-          {[...new Set(tableData.map((d) => d.city))].map((city) => (
-            <option key={city} value={city}>
-              {city}
-            </option>
-          ))}
-        </select>
+            {/* Status Filter */}
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="appearance-none border border-gray-300 rounded-lg px-4 py-2 pr-10 text-sm bg-white dark:bg-gray-900 dark:text-white"
+            >
+              <option value="All">All Status</option>
+              {[...new Set(tableData.map((d) => d.status))].map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
 
-        {/* Status Filter */}
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-        >
-          <option value="All">All Status</option>
-          {[...new Set(tableData.map((d) => d.status))].map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-        </div>
-        
 
 
           <Table>
             {/* Table Header */}
             <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
               <TableRow>
-                
+
                 <TableCell
                   isHeader
                   className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
@@ -179,14 +183,14 @@ export default function DriverTable() {
             {/* Table Body */}
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
               {filteredData.map((order) => (
-                <TableRow 
-                key={order.id}
-                onClick={() => {
-                console.log("Navigating to:", `/DriverProfile/${order.id}`);
+                <TableRow
+                  key={order.id}
+                  onClick={() => {
+                    console.log("Navigating to:", `/DriverProfile/${order.id}`);
 
-                navigate(`/DriverProfile/${order.id}`,{state: {driver: order}});
-                }}
-                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition"
+                    navigate(`/DriverProfile/${order.id}`, { state: { driver: order } });
+                  }}
+                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition"
                 >
                   {/* Name + Image  */}
                   <TableCell className="px-5 py-4 text-start">
@@ -204,7 +208,7 @@ export default function DriverTable() {
                         <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
                           {order.user.name}
                         </span>
-                        
+
                       </div>
                     </div>
                   </TableCell>
@@ -227,8 +231,8 @@ export default function DriverTable() {
                         order.status === "Active"
                           ? "success"
                           : order.status === "Pending"
-                          ? "warning"
-                          : "error"
+                            ? "warning"
+                            : "error"
                       }
                     >
                       {order.status}
