@@ -7,7 +7,6 @@ interface RoleFormProps {
     email: string;
     name: string;
     region: string;
-    city: string[];
     role: string;
     gender: string;
     password: string;
@@ -17,35 +16,15 @@ interface RoleFormProps {
 }
 
 export default function RoleForm({ initialData, onSubmit }: RoleFormProps) {
-//   const [formData, setFormData] = useState(
-//     initialData || {
-//       email: "",
-//       name: "",
-//       region: "",
-//       city: [],
-//       role: "",
-//       gender: "",
-//       password: "",
-//       confirmPassword: "",
-//     }
-//   );
 const [formData, setFormData] = useState({
   email: initialData?.email || "",
   name: initialData?.name || "",
   region: initialData?.region || "",
-  city: Array.isArray(initialData?.city) ? initialData.city : [], // safe
   role: initialData?.role || "",
   gender: initialData?.gender || "",
   password: initialData?.password || "",
   confirmPassword: initialData?.confirmPassword || "",
 });
-
-  // region-wise cities
-  const cityOptions: Record<string, string[]> = {
-    UK: ["London", "Manchester", "Birmingham", "Liverpool"],
-    Malta: ["Valletta", "Sliema", "Mdina", "St. Julian’s"],
-    Pakistan: ["Karachi", "Lahore", "Islamabad", "Faisalabad"],
-  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -64,7 +43,6 @@ const [formData, setFormData] = useState({
     onSubmit(formData);
   };
 
-  const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -169,69 +147,6 @@ const [formData, setFormData] = useState({
           </select>
         </div>
 
-    
-        {/* City */}
-        <div className="relative">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-            City
-        </label>
-
-        <div
-            className={`w-full border border-gray-300 rounded-md px-3 py-2 bg-white cursor-pointer flex justify-between items-center ${
-            !formData.region ? "opacity-60 cursor-not-allowed" : ""
-            }`}
-            onClick={() => {
-            if (formData.region) setShowCityDropdown((prev) => !prev);
-            }}
-        >
-            <span className="text-gray-700">
-            {formData.city.length > 0
-                ? formData.city.join(", ")
-                : !formData.region
-                ? "Select Region First"
-                : "Select City"}
-            </span>
-            <svg
-            className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
-                showCityDropdown ? "rotate-180" : ""
-            }`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-            >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-        </div>
-
-  {showCityDropdown && formData.region && (
-    <div className="absolute w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto z-10">
-      {cityOptions[formData.region]?.map((city) => (
-        <div
-          key={city}
-          onClick={() =>
-            setFormData((prev) => ({
-              ...prev,
-              city: prev.city.includes(city)
-                ? prev.city.filter((c) => c !== city)
-                : [...prev.city, city],
-            }))
-          }
-          className="flex justify-between items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
-        >
-          <span>{city}</span>
-          {formData.city.includes(city) && (
-            <span className="text-green-500 font-bold">✅</span>
-          )}
-        </div>
-      ))}
-    </div>
-    )}
-
-        <p className="text-xs text-gray-500 mt-1">
-            Click to select multiple cities.
-        </p>
-    </div>
         {/* Password */}
         
         <div className="relative">
