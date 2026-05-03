@@ -6,8 +6,113 @@
 
 @layer base {
   body {
-    @apply relative text-base font-normal z-1 bg-gray-50 font-outfit;
+    @apply relative text-base font-normal z-1 font-outfit text-gray-700 dark:text-gray-300;
+    background-color: #f7f7fb;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(149, 7, 6, 0.06) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(149, 7, 6, 0.04) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(20, 30, 50, 0.04) 0px, transparent 50%);
+    background-attachment: fixed;
   }
+  .dark body {
+    background-color: #0c111d;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(149, 7, 6, 0.10) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(255, 255, 255, 0.02) 0px, transparent 50%);
+  }
+
+  /* Smoother focus rings on interactive elements */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 ring-offset-1 ring-offset-white dark:ring-offset-gray-900;
+  }
+
+  /* Better default selection color */
+  ::selection {
+    background-color: rgba(149, 7, 6, 0.18);
+  }
+}
+
+@layer utilities {
+  /* Frosted-glass surface used by header / sticky toolbars */
+  .glass {
+    @apply bg-white/70 backdrop-blur-md backdrop-saturate-150 dark:bg-gray-900/70;
+  }
+  .glass-strong {
+    @apply bg-white/90 backdrop-blur-lg backdrop-saturate-150 dark:bg-gray-900/85;
+  }
+
+  /* Brand gradient surface — for hero/CTA accents */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, #b30b0a 0%, #950706 50%, #6b0404 100%);
+  }
+  .bg-brand-gradient-soft {
+    background-image: linear-gradient(135deg, rgba(149, 7, 6, 0.08), rgba(149, 7, 6, 0.02));
+  }
+
+  /* Card surface — single class so every page card looks consistent */
+  .surface {
+    @apply rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_0_rgba(16,24,40,0.04)] transition-shadow dark:border-gray-800 dark:bg-gray-900;
+  }
+  .surface-hover {
+    @apply hover:shadow-[0_8px_24px_-12px_rgba(16,24,40,0.12)] dark:hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.4)];
+  }
+
+  /* Sticky page toolbar — used at the top of pages above tables */
+  .toolbar {
+    @apply sticky top-[64px] z-30 -mx-3 flex flex-wrap items-center gap-2 border-b border-gray-200/60 bg-white/80 px-3 py-3 backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/80 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6;
+  }
+
+  /* Animated entry — used by page wrappers + cards */
+  .animate-fade-up {
+    animation: fade-up 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+
+  /* Skeleton loader stripe */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800;
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.4s infinite;
+  }
+  .dark .skeleton::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      transparent 100%
+    );
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @layer components {

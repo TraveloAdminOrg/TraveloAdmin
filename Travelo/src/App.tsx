@@ -1,6 +1,5 @@
   import {  Routes, Route } from "react-router-dom";
   import SignIn from "./pages/AuthPages/SignIn";
-  import SignUp from "./pages/AuthPages/SignUp";
   import NotFound from "./pages/OtherPage/NotFound";
   // import UserProfiles from "./pages/UserProfiles";
   import Videos from "./pages/UiElements/Videos";
@@ -32,6 +31,14 @@
   import CreateRolePage from "./pages/RoleManagement/CreateRolePage";
   import AdminProfiles from "./pages/RoleManagement/AdminProfilePage";
   import EditRolePage from "./pages/RoleManagement/EditRolePage";
+  import RideTypesPage from "./pages/RideTypes/RideTypesPage";
+  import RidesPage from "./pages/Rides/RidesPage";
+  import DriverApprovalsPage from "./pages/DriverApprovals/DriverApprovalsPage";
+  import ReviewsPage from "./pages/Reviews/ReviewsPage";
+  import NotificationsPage from "./pages/Notifications/NotificationsPage";
+  import AdvertsPage from "./pages/Adverts/AdvertsPage";
+  import LiveDispatchPage from "./pages/LiveDispatch/LiveDispatchPage";
+  import ReportsPage from "./pages/Reports/ReportsPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 
 
@@ -77,6 +84,18 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
               {/* Fare Management */}
               <Route path="fare-management" element={<FareManagement />} />
 
+              {/* Ride Types (Vehicle Categories) */}
+              <Route path="ride-types" element={<RideTypesPage />} />
+
+              {/* New ride-hailing operations features */}
+              <Route path="rides" element={<RidesPage />} />
+              <Route path="driver-approvals" element={<DriverApprovalsPage />} />
+              <Route path="reviews" element={<ReviewsPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="adverts" element={<AdvertsPage />} />
+              <Route path="live-dispatch" element={<LiveDispatchPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+
               {/* Content Management */}
               <Route path="content-management" element={<ContentManagement />} />
               {/* Help and Support */}
@@ -103,7 +122,6 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
 
             {/* Auth Layout */}
             <Route path="/signin" element={<SignIn />} />
-            <Route path="/signup" element={<SignUp />} />
 
             {/* Fallback Route */}
             <Route path="*" element={<NotFound />} />
