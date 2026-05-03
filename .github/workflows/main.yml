@@ -40,7 +40,10 @@ jobs:
         run: |
           echo "S3_BUCKET=fe-travelo-app" >> $GITHUB_ENV
         #  echo "CF_DIST_ID=E2OT941MRDL1BB" >> $GITHUB_ENV
-
+      - name: Create .env file from example
+        working-directory: Travelo
+        run: cp .env.example .env
+        
       - name: Install Node dependencies
         working-directory: Travelo
         run: npm ci
