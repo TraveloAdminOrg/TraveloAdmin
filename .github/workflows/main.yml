@@ -38,8 +38,8 @@ jobs:
 
       - name: Set environment vars
         run: |
-          echo "S3_BUCKET=travelo-fe-bucket" >> $GITHUB_ENV
-          echo "CF_DIST_ID=E2OT941MRDL1BB" >> $GITHUB_ENV
+          echo "S3_BUCKET=fe-travelo-app" >> $GITHUB_ENV
+        #  echo "CF_DIST_ID=E2OT941MRDL1BB" >> $GITHUB_ENV
 
       - name: Install Node dependencies
         working-directory: Travelo
@@ -57,9 +57,9 @@ jobs:
         working-directory: Travelo
         run: |
           echo "Uploading to $S3_BUCKET"
-          aws s3 cp dist/ s3://$S3_BUCKET/ --recursive
+          aws s3 cp dist/ s3://$S3_BUCKET/ --recursive --acl public-read
 
-      - name: Invalidate CloudFront cache
-        run: |
-          echo "Invalidating CloudFront"
-          aws cloudfront create-invalidation --distribution-id $CF_DIST_ID --paths "/*"
+ ##     - name: Invalidate CloudFront cache
+  #      run: |
+  #        echo "Invalidating CloudFront"
+  #        aws cloudfront create-invalidation --distribution-id $CF_DIST_ID --paths "/*"
