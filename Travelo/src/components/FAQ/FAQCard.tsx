@@ -1,87 +1,49 @@
-import { useState } from "react";
-import { Pencil, Trash2, Check, X } from "lucide-react";
-
-interface FAQ {
-  id: number;
-  question: string;
-  answer: string;
-}
+import { Pencil, Trash2 } from "lucide-react";
+import type { Faq } from "../../types/faq";
 
 interface FAQCardProps {
-  faq: FAQ;
-  onDelete: (id: number) => void;
-  onUpdate: (id: number, updated: FAQ) => void;
+  faq: Faq;
+  onEdit: (faq: Faq) => void;
+  onDelete: (faq: Faq) => void;
 }
 
-export default function FAQCard({ faq, onDelete, onUpdate }: FAQCardProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [question, setQuestion] = useState(faq.question);
-  const [answer, setAnswer] = useState(faq.answer);
-
-  const handleSave = () => {
-    onUpdate(faq.id, { ...faq, question, answer });
-    setIsEditing(false);
-  };
-
+export default function FAQCard({ faq, onEdit, onDelete }: FAQCardProps) {
   return (
-    <div className="border border-gray-200 dark:border-white/[0.05] rounded-xl bg-white dark:bg-white/[0.03] p-4 shadow-sm">
-      {isEditing ? (
-        <div className="space-y-3">
-          <input
-            type="text"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Edit Question"
-          />
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Edit Answer"
-            rows={3}
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={handleSave}
-              className="text-green-600 hover:text-green-800"
-            >
-              <Check size={18} />
-            </button>
-            <button
-              onClick={() => setIsEditing(false)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X size={18} />
-            </button>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs transition hover:shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              #{faq.order}
+            </span>
+            <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
+              {faq.question}
+            </h3>
           </div>
-        </div>
-      ) : (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-1">
-            {faq.question}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          <p className="whitespace-pre-line text-sm text-gray-600 dark:text-gray-400">
             {faq.answer}
           </p>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setIsEditing(true)}
-              className="text-blue-500 hover:text-blue-700 transition"
-              title="Edit"
-            >
-              <Pencil size={18} />
-            </button>
-            <button
-              onClick={() => onDelete(faq.id)}
-              className="text-red-500 hover:text-red-700 transition"
-              title="Delete"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
         </div>
-      )}
+
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onEdit(faq)}
+            aria-label="Edit FAQ"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(faq)}
+            aria-label="Delete FAQ"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-error-500 transition hover:bg-error-50 dark:hover:bg-error-500/10"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

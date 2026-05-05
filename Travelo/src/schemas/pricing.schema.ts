@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { REGION_CODES } from "../lib/regions";
 
 const moneyField = (field: string) =>
   z
@@ -7,23 +6,35 @@ const moneyField = (field: string) =>
     .min(0, `${field} cannot be negative`)
     .max(1_000_000, `${field} is too large`);
 
-export const pricingRideTypeSchema = z.object({
-  rideType: z.string({ message: "Select a ride type" }).min(1, "Select a ride type"),
+export const weeklyFareEntrySchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
   baseFare: moneyField("Base fare"),
   pricePerKm: moneyField("Price per km"),
   pricePerMinute: moneyField("Price per minute"),
   minimumFare: moneyField("Minimum fare"),
   cancellationFee: moneyField("Cancellation fee"),
+  cleaningCharge: moneyField("Cleaning charge"),
+});
+
+export const pricingRideTypeSchema = z.object({
+  rideType: z
+    .string({ message: "Select a ride type" })
+    .min(1, "Select a ride type"),
+  weeklyFare: z
+    .array(weeklyFareEntrySchema)
+    .length(7, "Weekly fare must have one entry per day")
+    .refine(
+      (entries) => {
+        const days = entries.map((e) => e.dayOfWeek).sort((a, b) => a - b);
+        return days.every((d, i) => d === i);
+      },
+      { message: "Weekly fare must cover days 0–6 exactly once each" },
+    ),
 });
 
 export const pricingFormSchema = z
   .object({
-    countryCode: z.enum(REGION_CODES as [string, ...string[]]),
-    currency: z
-      .string({ message: "Currency is required" })
-      .trim()
-      .min(2, "Use a currency code (e.g. PKR)")
-      .max(8, "Currency code is too long"),
+    region: z.string({ message: "Select a region" }).min(1, "Select a region"),
     rideTypes: z
       .array(pricingRideTypeSchema)
       .min(1, "Add at least one ride type"),
@@ -39,4 +50,5 @@ export const pricingFormSchema = z
     },
   );
 
+export type WeeklyFareEntryInput = z.infer<typeof weeklyFareEntrySchema>;
 export type PricingFormInput = z.infer<typeof pricingFormSchema>;

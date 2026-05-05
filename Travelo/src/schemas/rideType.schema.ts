@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { REGION_CODES } from "../lib/regions";
 
 export const TITLE_MAX_LENGTH = 50;
 export const PASSENGERS_MIN = 1;
@@ -16,8 +15,9 @@ export const rideTypeFormSchema = z.object({
     .int("Must be a whole number")
     .min(PASSENGERS_MIN, `At least ${PASSENGERS_MIN} passenger`)
     .max(PASSENGERS_MAX, "Too many passengers"),
+  // Region _ids the ride type is enabled for.
   allowedRegions: z
-    .array(z.enum(REGION_CODES as [string, ...string[]]))
+    .array(z.string().min(1))
     .min(1, "Select at least one region"),
   isActive: z.boolean(),
   icon: z.string().trim().optional().or(z.literal("")),

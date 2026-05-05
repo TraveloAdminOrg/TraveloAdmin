@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 // import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { useNavigate } from "react-router-dom";
@@ -9,23 +9,16 @@ interface UserRole {
   name: string;
   role: string;
   region: string;
-  city: Array<string>;
-    email: string;
+  email: string;
   password: string;
 }
 
 const initialData: UserRole[] = [
-  { id: 1, name: "John Doe", role: "Sub-Admin", region: "UK", city: ["London"] , email: "john@example.com", password: "password123" },
-  { id: 2, name: "Sarah Khan", role: "Console", region: "Malta", city: ["Sliema"], email: "sarah@example.com", password: "password123" },
-  { id: 3, name: "Ali Raza", role: "Console", region: "UK", city: ["Manchester"], email: "ali@example.com", password: "password123" },
-  { id: 4, name: "Fatima Noor", role: "Sub-Admin", region: "Pakistan", city: ["Karachi"], email: "fatima@example.com", password: "password123" },
+  { id: 1, name: "John Doe", role: "Sub-Admin", region: "UK", email: "john@example.com", password: "password123" },
+  { id: 2, name: "Sarah Khan", role: "Console", region: "Malta", email: "sarah@example.com", password: "password123" },
+  { id: 3, name: "Ali Raza", role: "Console", region: "UK", email: "ali@example.com", password: "password123" },
+  { id: 4, name: "Fatima Noor", role: "Sub-Admin", region: "Pakistan", email: "fatima@example.com", password: "password123" },
 ];
-// const initialData: UserRole[] = [
-//   { id: 1, name: "John Doe", role: "Sub-Admin", region: "UK", city: "London" },
-//   { id: 2, name: "Sarah Khan", role: "Console", region: "Malta", city: "Sliema" },
-//   { id: 3, name: "Ali Raza", role: "Console", region: "UK", city: "Manchester" },
-//   { id: 4, name: "Fatima Noor", role: "Sub-Admin", region: "PAK", city: "Karachi" },
-// ];
 
 export default function RoleTable() {
   const [data, setData] = useState<UserRole[]>(initialData);
@@ -77,7 +70,6 @@ export default function RoleTable() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Name</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Role</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Region</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">City</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Email/Password</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold text-gray-600">Actions</th>
               </tr>
@@ -96,7 +88,6 @@ export default function RoleTable() {
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">{item.name}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{item.role}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{item.region}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.city.join(", ")}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{item.email},{item.password}</td>
                   <td className="px-6 py-4 flex items-center justify-center gap-3">
                     <button

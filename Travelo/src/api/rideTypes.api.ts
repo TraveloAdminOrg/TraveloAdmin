@@ -55,6 +55,6 @@ export const rideTypesApi = {
 
   remove: (id: string) =>
     apiClient
-      .delete<ApiResponse<null>>(ENDPOINTS.rideTypes.byId(id))
-      .then((r) => r.data),
+      .delete<ApiResponse<{ id: string }>>(ENDPOINTS.rideTypes.byId(id))
+      .then((r) => r.data.data.id),
 };

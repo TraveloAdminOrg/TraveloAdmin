@@ -71,11 +71,22 @@ export const ENDPOINTS = {
     byId: (id: string) => `/content/${id}`,
   },
   rideTypes: {
-    base: "/admin/ridetypes/",
-    byId: (id: string) => `/admin/ridetypes/${id}`,
+    base: "/rideType/",
+    byId: (id: string) => `/rideType/${id}`,
   },
   pricings: {
-    base: "/admin/pricings/",
-    byId: (id: string) => `/admin/pricings/${id}`,
+    base: "/fare",
+    list: "/fare/",
+    byId: (id: string) => `/fare/${id}`,
+  },
+  // TODO: confirm path with backend — assumed `/region/` to match the `/fare/` convention.
+  regions: {
+    base: "/region",
+    list: "/region/",
+    byId: (id: string) => `/region/${id}`,
+  },
+  faqs: {
+    base: "/faq/",
+    byId: (id: string) => `/faq/${id}`,
   },
 } as const;

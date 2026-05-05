@@ -14,18 +14,24 @@ import {
   usePricingsQuery,
 } from "../../hooks/queries/usePricings";
 import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
-import { REGIONS, regionLabel, type RegionCode } from "../../lib/regions";
+import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
 import type { Pricing } from "../../types/pricing";
 
-type TabValue = "ALL" | RegionCode;
-
-const TABS: { value: TabValue; label: string }[] = [
-  { value: "ALL", label: "All" },
-  ...REGIONS.map((r) => ({ value: r.code, label: r.label })),
-];
+type TabValue = "ALL" | string; // "ALL" or a region _id
 
 const DEFAULT_PAGE_SIZE = 10;
+
+// Read the region id whether the API returned an object or a string.
+const regionRefId = (r: Pricing["region"] | null | undefined): string => {
+  if (!r) return "";
+  return typeof r === "string" ? r : r._id ?? "";
+};
+
+const regionDisplayName = (r: Pricing["region"] | null | undefined): string => {
+  if (!r || typeof r === "string") return "—";
+  return r.country || r.code || "—";
+};
 
 export default function FareManagementPage() {
   const [page, setPage] = useState(1);
@@ -46,6 +52,7 @@ export default function FareManagementPage() {
 
   // Pull ride types (large page) so cards can resolve _id → title.
   const { data: rideTypesData } = useRideTypesQuery({ page: 1, limit: 100 });
+  const { data: regions = [] } = useRegionsQuery();
 
   const rideTypeNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -55,6 +62,24 @@ export default function FareManagementPage() {
 
   const pricings = data?.pricings ?? [];
   const meta = data?.meta;
+
+  // Build tabs from fetched regions so they reflect what's actually configured
+  // in the backend, not a hardcoded list.
+  const tabs = useMemo<{ value: TabValue; label: string }[]>(() => {
+    const base: { value: TabValue; label: string }[] = [
+      { value: "ALL", label: "All" },
+    ];
+    return [
+      ...base,
+      ...regions.map((r) => ({ value: r._id, label: r.country })),
+    ];
+  }, [regions]);
+
+  const regionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    regions.forEach((r) => map.set(r._id, r.country));
+    return map;
+  }, [regions]);
 
   // Reset to page 1 when tab changes.
   useEffect(() => {
@@ -72,14 +97,16 @@ export default function FareManagementPage() {
     () =>
       activeTab === "ALL"
         ? pricings
-        : pricings.filter((p) => p.countryCode === activeTab),
+        : pricings.filter((p) => regionRefId(p.region) === activeTab),
     [pricings, activeTab],
   );
 
+  // Counts on the current page only — meaningful as a hint, not a global count
+  // (server-side region filtering would be needed for that).
   const tabCount = (value: TabValue) =>
     value === "ALL"
       ? pricings.length
-      : pricings.filter((p) => p.countryCode === value).length;
+      : pricings.filter((p) => regionRefId(p.region) === value).length;
 
   const openCreate = () => {
     setEditing(null);
@@ -101,7 +128,7 @@ export default function FareManagementPage() {
     try {
       await deleteMutation.mutateAsync(pendingDelete._id);
       toast.success(
-        `Deleted pricing for ${regionLabel(pendingDelete.countryCode)}`,
+        `Deleted pricing for ${regionDisplayName(pendingDelete.region)}`,
       );
       setPendingDelete(null);
     } catch (err) {
@@ -113,8 +140,8 @@ export default function FareManagementPage() {
     }
   };
 
-  const defaultRegionForCreate =
-    activeTab !== "ALL" ? (activeTab as RegionCode) : undefined;
+  const defaultRegionIdForCreate =
+    activeTab !== "ALL" ? activeTab : undefined;
 
   return (
     <>
@@ -150,7 +177,7 @@ export default function FareManagementPage() {
           aria-label="Filter by region"
           className="flex flex-wrap gap-1"
         >
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const isActive = activeTab === t.value;
             return (
               <button
@@ -158,7 +185,7 @@ export default function FareManagementPage() {
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveTab(t.value)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition ${
                   isActive
                     ? "bg-brand-500 text-white"
                     : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
@@ -193,7 +220,9 @@ export default function FareManagementPage() {
           title={
             activeTab === "ALL"
               ? "No pricings yet"
-              : `No pricings for ${regionLabel(activeTab as RegionCode)}`
+              : `No pricings for ${
+                  regionNameById.get(activeTab) ?? "this region"
+                }`
           }
           description="Create one to get started."
           action={
@@ -218,6 +247,7 @@ export default function FareManagementPage() {
                 key={p._id}
                 pricing={p}
                 rideTypeNames={rideTypeNames}
+                regionNameById={regionNameById}
                 onEdit={openEdit}
                 onDelete={setPendingDelete}
               />
@@ -247,7 +277,7 @@ export default function FareManagementPage() {
         isOpen={isFormOpen}
         onClose={closeForm}
         pricing={editing}
-        defaultRegion={defaultRegionForCreate}
+        defaultRegionId={defaultRegionIdForCreate}
       />
 
       <DeleteConfirmDialog
@@ -255,7 +285,9 @@ export default function FareManagementPage() {
         title="Delete this pricing?"
         description={
           pendingDelete
-            ? `The pricing for ${regionLabel(pendingDelete.countryCode)} will be permanently removed. This cannot be undone.`
+            ? `The pricing for ${regionDisplayName(
+                pendingDelete.region,
+              )} will be permanently removed. This cannot be undone.`
             : ""
         }
         isLoading={deleteMutation.isPending}

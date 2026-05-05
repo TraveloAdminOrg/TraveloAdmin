@@ -1,11 +1,12 @@
-import type { RegionCode } from "../lib/regions";
-
 export interface RideType {
   _id: string;
   icon: string;
   title: string;
   passengers: number;
-  allowedRegions: RegionCode[];
+  // Region _ids the ride type is enabled for. Backend returns the populated
+  // ObjectIds; the form filters its dropdowns against this list.
+  allowedRegions: string[];
+  allowedCities?: string[];
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -15,7 +16,7 @@ export type RideTypeCreateInput = {
   icon?: string;
   title: string;
   passengers: number;
-  allowedRegions: RegionCode[];
+  allowedRegions: string[];
   isActive: boolean;
 };
 
