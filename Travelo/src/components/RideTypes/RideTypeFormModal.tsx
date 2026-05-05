@@ -7,7 +7,6 @@ import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
-import { REGIONS, type RegionCode } from "../../lib/regions";
 import {
   rideTypeFormSchema,
   TITLE_MAX_LENGTH,
@@ -18,19 +17,20 @@ import {
   useCreateRideType,
   useUpdateRideType,
 } from "../../hooks/queries/useRideTypes";
+import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import type { RideType } from "../../types/rideType";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   rideType?: RideType | null; // edit mode if provided
-  defaultRegion?: RegionCode; // pre-selects this region in create mode
+  defaultRegionId?: string; // pre-selects this region in create mode (region _id)
 }
 
-const emptyDefaults = (defaultRegion?: RegionCode): RideTypeFormInput => ({
+const emptyDefaults = (defaultRegionId?: string): RideTypeFormInput => ({
   title: "",
   passengers: 1,
-  allowedRegions: defaultRegion ? [defaultRegion] : [],
+  allowedRegions: defaultRegionId ? [defaultRegionId] : [],
   isActive: true,
   icon: "",
 });
@@ -39,9 +39,11 @@ export default function RideTypeFormModal({
   isOpen,
   onClose,
   rideType,
-  defaultRegion,
+  defaultRegionId,
 }: Props) {
   const isEdit = Boolean(rideType);
+
+  const { data: regions = [], isLoading: regionsLoading } = useRegionsQuery();
 
   const {
     control,
@@ -51,7 +53,7 @@ export default function RideTypeFormModal({
   } = useForm<RideTypeFormInput>({
     resolver: zodResolver(rideTypeFormSchema),
     mode: "onTouched",
-    defaultValues: emptyDefaults(defaultRegion),
+    defaultValues: emptyDefaults(defaultRegionId),
   });
 
   // Reset form whenever modal opens or rideType changes.
@@ -66,9 +68,9 @@ export default function RideTypeFormModal({
         icon: rideType.icon ?? "",
       });
     } else {
-      reset(emptyDefaults(defaultRegion));
+      reset(emptyDefaults(defaultRegionId));
     }
-  }, [isOpen, rideType, defaultRegion, reset]);
+  }, [isOpen, rideType, defaultRegionId, reset]);
 
   const createMutation = useCreateRideType();
   const updateMutation = useUpdateRideType();
@@ -77,7 +79,6 @@ export default function RideTypeFormModal({
     try {
       const payload = {
         ...values,
-        allowedRegions: values.allowedRegions as RegionCode[],
         icon: values.icon || undefined,
       };
 
@@ -213,23 +214,48 @@ export default function RideTypeFormModal({
               name="allowedRegions"
               control={control}
               render={({ field }) => {
-                const value = (field.value ?? []) as RegionCode[];
+                const value = (field.value ?? []) as string[];
                 return (
                   <div className="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                    {REGIONS.map((r) => (
-                      <Checkbox
-                        key={r.code}
-                        label={`${r.label} (${r.code})`}
-                        checked={value.includes(r.code)}
-                        onChange={(checked) => {
-                          field.onChange(
-                            checked
-                              ? [...value, r.code]
-                              : value.filter((v) => v !== r.code),
-                          );
-                        }}
-                      />
-                    ))}
+                    {regionsLoading ? (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Loading regions…
+                      </p>
+                    ) : regions.length === 0 ? (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        No regions configured yet.
+                      </p>
+                    ) : (
+                      regions.map((r) => (
+                        <Checkbox
+                          key={r._id}
+                          label={`${r.country} (${r.code})`}
+                          checked={value.includes(r._id)}
+                          onChange={(checked) => {
+                            field.onChange(
+                              checked
+                                ? [...value, r._id]
+                                : value.filter((v) => v !== r._id),
+                            );
+                          }}
+                        />
+                      ))
+                    )}
+                    {/* Surface any pre-selected region _ids that aren't in the loaded list (e.g. stale or deactivated). */}
+                    {value
+                      .filter((id) => !regions.some((r) => r._id === id))
+                      .map((id) => (
+                        <Checkbox
+                          key={id}
+                          label={`Existing region (${id.slice(0, 8)}…)`}
+                          checked
+                          onChange={(checked) => {
+                            field.onChange(
+                              checked ? value : value.filter((v) => v !== id),
+                            );
+                          }}
+                        />
+                      ))}
                   </div>
                 );
               }}

@@ -11,13 +11,15 @@ import type {
   PricingUpdateInput,
 } from "../types/pricing";
 
-interface SingleEnvelope {
-  pricing: Pricing;
+// Backend wraps every response as `{ success, message, data: { ... } }`.
+// GET /fare/?page=&limit= → `{ fares: Pricing[], meta }`.
+interface ListEnvelope {
+  fares: Pricing[];
+  meta: PaginationMeta;
 }
 
-interface ListEnvelope {
-  pricings: Pricing[];
-  meta: PaginationMeta;
+interface SingleEnvelope {
+  fare: Pricing;
 }
 
 export interface PricingsListResult {
@@ -28,25 +30,24 @@ export interface PricingsListResult {
 export const pricingsApi = {
   list: ({ page = 1, limit = 10 }: PaginationParams = {}) =>
     apiClient
-      .get<ApiResponse<ListEnvelope>>(ENDPOINTS.pricings.base, {
+      .get<ApiResponse<ListEnvelope>>(ENDPOINTS.pricings.list, {
         params: { page, limit },
       })
       .then((r) => ({
-        pricings: r.data.data.pricings ?? [],
+        pricings: r.data.data.fares ?? [],
         meta: r.data.data.meta,
       })),
 
   create: (data: PricingCreateInput) =>
     apiClient
       .post<ApiResponse<SingleEnvelope>>(ENDPOINTS.pricings.base, data)
-      .then((r) => r.data.data.pricing),
+      .then((r) => r.data.data.fare),
 
   update: (id: string, data: PricingUpdateInput) =>
     apiClient
       .patch<ApiResponse<SingleEnvelope>>(ENDPOINTS.pricings.byId(id), data)
-      .then((r) => r.data.data.pricing),
+      .then((r) => r.data.data.fare),
 
-  // TODO: confirm DELETE endpoint with backend (assumed standard REST).
   remove: (id: string) =>
     apiClient
       .delete<ApiResponse<null>>(ENDPOINTS.pricings.byId(id))

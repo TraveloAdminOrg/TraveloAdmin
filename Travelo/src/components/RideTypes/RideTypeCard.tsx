@@ -1,16 +1,22 @@
 import { Pencil, Trash2, Users } from "lucide-react";
 import type { RideType } from "../../types/rideType";
-import { regionLabel } from "../../lib/regions";
 
 const FALLBACK_ICON = "/images/user/owner.jpg";
 
 interface Props {
   rideType: RideType;
+  // _id -> { country, code } so we can render readable region badges.
+  regionsById?: Map<string, { country: string; code: string }>;
   onEdit: (rt: RideType) => void;
   onDelete: (rt: RideType) => void;
 }
 
-export default function RideTypeCard({ rideType, onEdit, onDelete }: Props) {
+export default function RideTypeCard({
+  rideType,
+  regionsById,
+  onEdit,
+  onDelete,
+}: Props) {
   return (
     <div className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs transition hover:shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-start gap-4">
@@ -48,15 +54,24 @@ export default function RideTypeCard({ rideType, onEdit, onDelete }: Props) {
           </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {rideType.allowedRegions.map((code) => (
-              <span
-                key={code}
-                className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
-                title={regionLabel(code)}
-              >
-                {code}
+            {rideType.allowedRegions.length === 0 ? (
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                No regions assigned
               </span>
-            ))}
+            ) : (
+              rideType.allowedRegions.map((id) => {
+                const r = regionsById?.get(id);
+                return (
+                  <span
+                    key={id}
+                    className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium capitalize text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
+                    title={r?.country ?? id}
+                  >
+                    {r?.code ?? r?.country ?? id.slice(0, 6)}
+                  </span>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

@@ -13,16 +13,11 @@ import {
   useDeleteRideType,
   useRideTypesQuery,
 } from "../../hooks/queries/useRideTypes";
-import { REGIONS, type RegionCode } from "../../lib/regions";
+import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
 import type { RideType } from "../../types/rideType";
 
-type TabValue = "ALL" | RegionCode;
-
-const TABS: { value: TabValue; label: string }[] = [
-  { value: "ALL", label: "All" },
-  ...REGIONS.map((r) => ({ value: r.code, label: r.label })),
-];
+type TabValue = "ALL" | string; // "ALL" or a region _id
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -45,9 +40,28 @@ export default function RideTypesPage() {
     limit,
   });
   const deleteMutation = useDeleteRideType();
+  const { data: regions = [] } = useRegionsQuery();
 
   const rideTypes = data?.rideTypes ?? [];
   const meta = data?.meta;
+
+  // Build tabs from fetched regions (so they match real backend documents).
+  const tabs = useMemo<{ value: TabValue; label: string }[]>(
+    () => [
+      { value: "ALL", label: "All" },
+      ...regions.map((r) => ({ value: r._id, label: r.country })),
+    ],
+    [regions],
+  );
+
+  // _id -> { country, code } for the card badges.
+  const regionsById = useMemo(() => {
+    const map = new Map<string, { country: string; code: string }>();
+    regions.forEach((r) =>
+      map.set(r._id, { country: r.country, code: r.code }),
+    );
+    return map;
+  }, [regions]);
 
   // Reset to page 1 whenever a filter changes (avoids landing on empty pages).
   useEffect(() => {
@@ -100,16 +114,14 @@ export default function RideTypesPage() {
     }
   };
 
-  const defaultRegionForCreate =
-    activeTab !== "ALL" ? (activeTab as RegionCode) : undefined;
+  const defaultRegionIdForCreate =
+    activeTab !== "ALL" ? activeTab : undefined;
 
   // Region tab counts use only the current page (until backend supports a region filter).
   const tabCount = (value: TabValue) =>
     value === "ALL"
       ? rideTypes.length
-      : rideTypes.filter((rt) =>
-          rt.allowedRegions.includes(value as RegionCode),
-        ).length;
+      : rideTypes.filter((rt) => rt.allowedRegions.includes(value)).length;
 
   return (
     <>
@@ -144,7 +156,7 @@ export default function RideTypesPage() {
           aria-label="Filter by region"
           className="flex flex-wrap gap-1"
         >
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const isActive = activeTab === t.value;
             return (
               <button
@@ -152,7 +164,7 @@ export default function RideTypesPage() {
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveTab(t.value)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition ${
                   isActive
                     ? "bg-brand-500 text-white"
                     : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
@@ -200,7 +212,9 @@ export default function RideTypesPage() {
               ? "No matches"
               : activeTab === "ALL"
                 ? "No ride types yet"
-                : `No ride types in ${TABS.find((t) => t.value === activeTab)?.label}`
+                : `No ride types in ${
+                    tabs.find((t) => t.value === activeTab)?.label ?? "this region"
+                  }`
           }
           description={
             search
@@ -230,6 +244,7 @@ export default function RideTypesPage() {
               <RideTypeCard
                 key={rt._id}
                 rideType={rt}
+                regionsById={regionsById}
                 onEdit={openEdit}
                 onDelete={setPendingDelete}
               />
@@ -260,7 +275,7 @@ export default function RideTypesPage() {
         isOpen={isFormOpen}
         onClose={closeForm}
         rideType={editing}
-        defaultRegion={defaultRegionForCreate}
+        defaultRegionId={defaultRegionIdForCreate}
       />
 
       <DeleteConfirmDialog
