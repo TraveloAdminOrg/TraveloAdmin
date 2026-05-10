@@ -5,35 +5,42 @@ import type {
   PaginationMeta,
   PaginationParams,
 } from "../types/api";
-import type { User } from "../types/user";
+import type { CustomerRegionCountsResponse, User } from "../types/user";
 
 interface SingleEnvelope {
-  user: User;
+  customer: User;
 }
 
 interface ListEnvelope {
-  users: User[];
+  customers: User[];
   meta: PaginationMeta;
 }
 
-export interface UsersListResult {
-  users: User[];
-  meta: PaginationMeta;
+export interface UsersListParams extends PaginationParams {
+  region?: string;
+  search?: string;
 }
 
 export const usersApi = {
-  list: ({ page = 1, limit = 10 }: PaginationParams = {}) =>
+  list: ({ page = 1, limit = 10, ...rest }: UsersListParams = {}) =>
     apiClient
       .get<ApiResponse<ListEnvelope>>(ENDPOINTS.users.base, {
-        params: { page, limit },
+        params: { page, limit, ...rest },
       })
       .then((r) => ({
-        users: r.data.data.users ?? [],
+        users: r.data.data.customers ?? [],
         meta: r.data.data.meta,
       })),
 
   getById: (id: string) =>
     apiClient
       .get<ApiResponse<SingleEnvelope>>(ENDPOINTS.users.byId(id))
-      .then((r) => r.data.data.user),
+      .then((r) => r.data.data.customer),
+
+  regionCounts: () =>
+    apiClient
+      .get<ApiResponse<CustomerRegionCountsResponse>>(
+        ENDPOINTS.users.regionCounts,
+      )
+      .then((r) => r.data.data),
 };

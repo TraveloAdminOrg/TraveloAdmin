@@ -9,9 +9,10 @@ export const ENDPOINTS = {
     me: "/admin/me",
   },
   users: {
-    base: "/admin/users/",
-    byId: (id: string) => `/admin/users/${id}`,
-    block: (id: string) => `/admin/users/${id}/block`,
+    base: "/admin/customers/",
+    byId: (id: string) => `/admin/customers/${id}`,
+    block: (id: string) => `/admin/customers/${id}/block`,
+    regionCounts: "/admin/customers/region-counts",
   },
   drivers: {
     base: "/admin/drivers/",
@@ -29,9 +30,9 @@ export const ENDPOINTS = {
     byDriver: (driverId: string) => `/admin/drivers/${driverId}/rides`,
   },
   payments: {
-    base: "/transaction/",
-    byId: (id: string) => `/transaction/${id}`,
-    refund: (id: string) => `/transaction/${id}/refund`,
+    base: "/admin/transactions/",
+    byId: (id: string) => `/admin/transactions/${id}`,
+    refund: (id: string) => `/admin/transactions/${id}/refund`,
   },
   reviews: {
     base: "/review/",
@@ -51,11 +52,14 @@ export const ENDPOINTS = {
     activeRides: "/admin/dispatch/active-rides",
   },
   reports: {
-    overview: "/admin/reports/overview",
-    revenue: "/admin/reports/revenue",
-    rides: "/admin/reports/rides",
-    drivers: "/admin/reports/drivers",
-    export: (resource: string) => `/admin/reports/export/${resource}`,
+    overview: "/report/overview",
+    leaderboard: "/report/leaderboard",
+    // Kept for legacy callers that still reference these names; the underlying
+    // endpoints don't exist on the new backend and will 404.
+    revenue: "/report/revenue",
+    rides: "/report/rides",
+    drivers: "/report/leaderboard",
+    export: (resource: string) => `/report/export/${resource}`,
   },
   fares: {
     base: "/fares",
@@ -94,5 +98,13 @@ export const ENDPOINTS = {
   },
   dashboard: {
     kpis: "/adminDashboard/",
+    revenueTrend: "/adminDashboard/revenue-trend",
+    regionsOverview: "/adminDashboard/regions-overview",
+    ridesTrend: "/adminDashboard/rides-trend",
+    driverStatus: "/adminDashboard/driver-status",
+    pendingApprovals: "/adminDashboard/pending-approvals",
+    reviewsNeedingAttention: "/adminDashboard/reviews-needing-attention",
+    topDrivers: "/adminDashboard/top-drivers",
+    latestRides: "/adminDashboard/latest-rides",
   },
 } as const;

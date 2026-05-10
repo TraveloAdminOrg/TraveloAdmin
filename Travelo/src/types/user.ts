@@ -50,3 +50,16 @@ export interface User {
   defaultPaymentMethod?: string;
   averageRating?: number;
 }
+
+// Mirrors the `data` payload of GET /admin/customers/region-counts.
+export interface CustomerRegionCount {
+  code: string;
+  country: string;
+  currency: string;
+  count: number;
+}
+
+export interface CustomerRegionCountsResponse {
+  total: number;
+  regions: CustomerRegionCount[];
+}
