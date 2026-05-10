@@ -30,7 +30,17 @@ import {
   useRidesReportQuery,
   useDriversReportQuery,
 } from "../../hooks/queries/useReports";
-import { useDashboardKpisQuery } from "../../hooks/queries/useDashboard";
+import {
+  useDashboardKpisQuery,
+  useDriverStatusQuery,
+  useLatestRidesQuery,
+  usePendingApprovalsQuery,
+  useRegionsOverviewQuery,
+  useReviewsNeedingAttentionQuery,
+  useRevenueTrendQuery,
+  useRidesTrendQuery,
+  useTopDriversQuery,
+} from "../../hooks/queries/useDashboard";
 import {
   useActiveDriversQuery,
   useActiveDispatchRidesQuery,
@@ -44,7 +54,12 @@ import {
 } from "../../hooks/queries/useDriverApprovals";
 import { useAuth } from "../../context/AuthContext";
 import { formatCurrency, formatDateTime } from "../../lib/format";
-import { REGIONS, regionLabel, type RegionCode } from "../../lib/regions";
+import {
+  REGIONS,
+  regionCurrency,
+  regionLabel,
+  type RegionCode,
+} from "../../lib/regions";
 import { getErrorMessage } from "../../lib/error";
 
 type RegionFilter = "all" | RegionCode;
@@ -73,9 +88,50 @@ export default function Home() {
   );
 
   const kpisQ = useDashboardKpisQuery();
+  const revenueTrendQ = useRevenueTrendQuery();
+  const regionsOverviewQ = useRegionsOverviewQuery();
+  const ridesTrendQ = useRidesTrendQuery();
+  const driverStatusQ = useDriverStatusQuery(
+    region === "all" ? undefined : region.toLowerCase(),
+  );
+  const pendingApprovalsQ = usePendingApprovalsQuery();
+  const reviewsAttentionQ = useReviewsNeedingAttentionQuery();
+  const topDriversQ = useTopDriversQuery();
+  const latestRidesQ = useLatestRidesQuery();
+
+  // Legacy report queries — kept as fallbacks while the new dashboard endpoints
+  // ramp up. They cost nothing extra if the new ones return first.
   const revenueQ = useRevenueReportQuery(range);
-  const ridesTrendQ = useRidesReportQuery(range);
+  const ridesTrendReportQ = useRidesReportQuery(range);
   const leaderboardQ = useDriversReportQuery(range);
+
+  // Prefer the dedicated /adminDashboard/revenue-trend endpoint; fall back to
+  // the reports-based query if the trend endpoint hasn't returned yet or fails.
+  const revenuePoints = useMemo(
+    () =>
+      revenueTrendQ.data
+        ? revenueTrendQ.data.trend.map((p) => ({
+            date: p.date,
+            amount: p.totalRevenue,
+          }))
+        : (revenueQ.data ?? []),
+    [revenueTrendQ.data, revenueQ.data],
+  );
+  const revenueTotal =
+    revenueTrendQ.data?.totalRevenue ??
+    revenuePoints.reduce((s, p) => s + (p.amount || 0), 0);
+  const revenueDays = revenueTrendQ.data?.days ?? 30;
+  const revenueLoading = revenueTrendQ.isLoading && revenueQ.isLoading;
+  const revenueError = revenueTrendQ.error && revenueQ.error;
+
+  // Rides trend → bar chart points. Fall back to the legacy report endpoint
+  // until the new dashboard query returns.
+  const ridesPoints = useMemo(
+    () => ridesTrendQ.data?.trend ?? ridesTrendReportQ.data ?? [],
+    [ridesTrendQ.data, ridesTrendReportQ.data],
+  );
+  const ridesLoading = ridesTrendQ.isLoading && ridesTrendReportQ.isLoading;
+  const ridesDays = ridesTrendQ.data?.days ?? 30;
 
   const activeDriversQ = useActiveDriversQuery();
   const activeRidesQ = useActiveDispatchRidesQuery();
@@ -88,12 +144,64 @@ export default function Home() {
   const lowReviewsQ = useReviewsQuery({ page: 1, limit: 5, maxRating: 3 });
 
   const kpis = kpisQ.data;
-  const DEFAULT_CURRENCY = "USD";
+  // Currency follows the active region tab. Cross-region KPIs can't be
+  // meaningfully expressed in one currency, so "All regions" stays in USD.
+  const activeCurrency =
+    region === "all"
+      ? "USD"
+      : regionsOverviewQ.data?.find(
+          (r) => r.code?.toUpperCase() === region,
+        )?.currency ?? regionCurrency(region);
   const allActiveDrivers = activeDriversQ.data ?? [];
   const allActiveRides = activeRidesQ.data ?? [];
-  const recentRides = recentRidesQ.data?.rides ?? [];
-  const lowReviews = lowReviewsQ.data?.reviews ?? [];
-  const leaderboard = (leaderboardQ.data ?? []).slice(0, 5);
+  // Normalize recent rides into a single display shape, sourced from the
+  // dedicated /latest-rides endpoint when available, else the legacy list.
+  const recentRides = useMemo(() => {
+    const fromDashboard = latestRidesQ.data;
+    if (fromDashboard) {
+      const filtered =
+        region === "all"
+          ? fromDashboard
+          : fromDashboard.filter((r) => r.region === region);
+      return filtered.slice(0, 8).map((r) => ({
+        _id: r._id,
+        userName: r.userId?.fullName || r.userId?.username || undefined,
+        driverName: r.driverId?.fullName || r.driverId?.username || undefined,
+        countryCode: r.region,
+        fare: r.fare ?? r.bid ?? r.estimatedFare,
+        currency: r.currency,
+        status: r.status,
+        createdAt: r.createdAt,
+      }));
+    }
+    return recentRidesQ.data?.rides ?? [];
+  }, [latestRidesQ.data, recentRidesQ.data, region]);
+  const lowReviews =
+    reviewsAttentionQ.data ?? lowReviewsQ.data?.reviews ?? [];
+  // Map the dashboard's top-drivers payload to the same display shape used by
+  // the leaderboard list, with a graceful fall-back to the legacy report.
+  const leaderboard = useMemo(() => {
+    const fromDashboard = topDriversQ.data?.drivers;
+    if (fromDashboard) {
+      return fromDashboard.slice(0, 5).map((row) => ({
+        driverId: row.driverId,
+        driverName:
+          row.driver?.fullName || row.driver?.username || "Unknown driver",
+        driverImage: row.driver?.image,
+        rides: row.completedRides,
+        revenue: row.totalRevenue,
+        rating: row.averageRating,
+      }));
+    }
+    return (leaderboardQ.data ?? []).slice(0, 5).map((row) => ({
+      driverId: row.driverId,
+      driverName: row.driverName,
+      driverImage: undefined as string | undefined,
+      rides: row.rides,
+      revenue: row.revenue,
+      rating: row.rating ?? 0,
+    }));
+  }, [topDriversQ.data, leaderboardQ.data]);
 
   // Client-side region filtering for endpoints that don't yet support countryCode.
   const activeDrivers = useMemo(
@@ -111,15 +219,32 @@ export default function Home() {
     [allActiveRides, region],
   );
 
+  // Prefer the server-driven /pending-approvals list; fall back to the
+  // locally-derived list if the new endpoint hasn't returned yet.
   const pendingApprovals = useMemo(() => {
-    const all = (driversQ.data?.drivers ?? []).filter(
+    const serverList = pendingApprovalsQ.data?.drivers;
+    if (serverList && serverList.length >= 0 && pendingApprovalsQ.data) {
+      return region === "all"
+        ? serverList
+        : serverList.filter((d) => d.country === region);
+    }
+    const local = (driversQ.data?.drivers ?? []).filter(
       (d) => d.isDocumentUploaded && !d.isApproved && !d.isBlocked,
     );
-    return region === "all" ? all : all.filter((d) => d.country === region);
-  }, [driversQ.data, region]);
+    return region === "all" ? local : local.filter((d) => d.country === region);
+  }, [pendingApprovalsQ.data, driversQ.data, region]);
+  const totalPending = pendingApprovalsQ.data?.total ?? pendingApprovals.length;
 
-  const onTrip = activeDrivers.filter((d) => d.currentRideId).length;
-  const idle = activeDrivers.filter((d) => !d.currentRideId).length;
+  // Driver status card metrics — prefer the dedicated endpoint, fall back to
+  // locally-derived counts from the dispatch query.
+  const localOnTrip = activeDrivers.filter((d) => d.currentRideId).length;
+  const localIdle = activeDrivers.filter((d) => !d.currentRideId).length;
+  const onTrip = driverStatusQ.data?.onRideDrivers ?? localOnTrip;
+  const idle = driverStatusQ.data?.idleDrivers ?? localIdle;
+  const totalActive =
+    driverStatusQ.data?.activeDrivers ?? activeDrivers.length;
+  const offline = driverStatusQ.data?.offlineDrivers ?? 0;
+  const totalDrivers = driverStatusQ.data?.totalDrivers ?? 0;
 
   const greeting = useMemo(() => {
     const hr = new Date().getHours();
@@ -161,30 +286,46 @@ export default function Home() {
       {/* Per-region snapshot strip — shown only when "All regions" is selected */}
       {region === "all" && (
         <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {REGIONS.map((r) => (
-            <RegionSnapshotCard
-              key={r.code}
-              code={r.code}
-              label={r.label}
-              currency={r.currency}
-              activeDrivers={allActiveDrivers.filter(
-                (d) => d.country === r.code,
-              )}
-              activeRides={allActiveRides.filter(
-                (rd) => rd.countryCode === r.code,
-              )}
-              pendingApprovals={
-                (driversQ.data?.drivers ?? []).filter(
-                  (d) =>
-                    d.isDocumentUploaded &&
-                    !d.isApproved &&
-                    !d.isBlocked &&
-                    d.country === r.code,
-                ).length
-              }
-              onSelect={() => setRegion(r.code)}
-            />
-          ))}
+          {REGIONS.map((r) => {
+            // Prefer server-side metrics; fall back to locally-derived counts
+            // if /adminDashboard/regions-overview hasn't returned yet.
+            const server = regionsOverviewQ.data?.find(
+              (s) => s.code?.toUpperCase() === r.code,
+            );
+            const localActiveDrivers = allActiveDrivers.filter(
+              (d) => d.country === r.code,
+            );
+            const localOnTrip = localActiveDrivers.filter(
+              (d) => d.currentRideId,
+            ).length;
+            const localPending = (driversQ.data?.drivers ?? []).filter(
+              (d) =>
+                d.isDocumentUploaded &&
+                !d.isApproved &&
+                !d.isBlocked &&
+                d.country === r.code,
+            ).length;
+            return (
+              <RegionSnapshotCard
+                key={r.code}
+                code={r.code}
+                label={r.label}
+                currency={server?.currency ?? r.currency}
+                totalDrivers={server?.totalDrivers ?? localActiveDrivers.length}
+                onTripDrivers={server?.onTripDrivers ?? localOnTrip}
+                idleDrivers={
+                  server?.idleDrivers ??
+                  localActiveDrivers.length - localOnTrip
+                }
+                activeRidesNow={
+                  server?.activeRidesNow ??
+                  allActiveRides.filter((rd) => rd.countryCode === r.code).length
+                }
+                pendingApprovals={server?.pendingApprovals ?? localPending}
+                onSelect={() => setRegion(r.code)}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -194,7 +335,7 @@ export default function Home() {
           label="Today's revenue"
           value={
             kpis
-              ? formatCurrency(kpis.totalTodayRevenue, DEFAULT_CURRENCY)
+              ? formatCurrency(kpis.totalTodayRevenue ?? 0, activeCurrency)
               : "—"
           }
           icon={<CircleDollarSign className="size-5" />}
@@ -203,7 +344,7 @@ export default function Home() {
         />
         <Kpi
           label="Today's rides"
-          value={kpis ? kpis.totalTodayRides.toLocaleString() : "—"}
+          value={kpis ? (kpis.totalTodayRides ?? 0).toLocaleString() : "—"}
           icon={<Car className="size-5" />}
           tone="brand"
           loading={kpisQ.isLoading}
@@ -219,7 +360,7 @@ export default function Home() {
           label="Pending approvals"
           value={
             kpis
-              ? kpis.totalPendingApprovals.toLocaleString()
+              ? (kpis.totalPendingApprovals ?? 0).toLocaleString()
               : pendingApprovals.length.toLocaleString()
           }
           icon={<ShieldCheck className="size-5" />}
@@ -234,7 +375,7 @@ export default function Home() {
         />
         <Kpi
           label="Active users"
-          value={kpis ? kpis.todayActiveUsers.toLocaleString() : "—"}
+          value={kpis ? (kpis.todayActiveUsers ?? 0).toLocaleString() : "—"}
           icon={<Users className="size-5" />}
           tone="brand"
           loading={kpisQ.isLoading}
@@ -242,19 +383,19 @@ export default function Home() {
         <Kpi
           label="Cancellation rate"
           value={
-            kpis ? `${kpis.totalCancellationRate.toFixed(1)}%` : "—"
+            kpis ? `${(kpis.totalCancellationRate ?? 0).toFixed(1)}%` : "—"
           }
           icon={
-            kpis && kpis.totalCancellationRate > 10 ? (
+            kpis && (kpis.totalCancellationRate ?? 0) > 10 ? (
               <TrendingUp className="size-5" />
             ) : (
               <TrendingDown className="size-5" />
             )
           }
           tone={
-            kpis && kpis.totalCancellationRate > 15
+            kpis && (kpis.totalCancellationRate ?? 0) > 15
               ? "error"
-              : kpis && kpis.totalCancellationRate > 8
+              : kpis && (kpis.totalCancellationRate ?? 0) > 8
                 ? "warning"
                 : "success"
           }
@@ -264,7 +405,10 @@ export default function Home() {
           label="Average fare"
           value={
             kpis
-              ? formatCurrency(kpis.totalTodayAverageFare, DEFAULT_CURRENCY)
+              ? formatCurrency(
+                  kpis.totalTodayAverageFare ?? 0,
+                  activeCurrency,
+                )
               : "—"
           }
           icon={<BarChart3 className="size-5" />}
@@ -275,7 +419,7 @@ export default function Home() {
           label="Active rides now"
           value={
             kpis
-              ? kpis.totalActiveRides.toLocaleString()
+              ? (kpis.totalActiveRides ?? 0).toLocaleString()
               : activeRides.length.toLocaleString()
           }
           icon={<Car className="size-5" />}
@@ -323,11 +467,15 @@ export default function Home() {
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card
           className="lg:col-span-2"
-          title="Revenue · last 30 days"
+          title={`Revenue · last ${revenueDays} days`}
           subtitle={`Total period: ${formatCurrency(
-            (revenueQ.data ?? []).reduce((s, p) => s + (p.amount || 0), 0),
-            DEFAULT_CURRENCY,
-          )}`}
+            revenueTotal,
+            activeCurrency,
+          )}${
+            revenueTrendQ.data?.totalRides != null
+              ? ` · ${(revenueTrendQ.data.totalRides ?? 0).toLocaleString()} rides`
+              : ""
+          }`}
           right={
             <Link
               to="/reports"
@@ -337,28 +485,34 @@ export default function Home() {
             </Link>
           }
         >
-          {revenueQ.isLoading ? (
+          {revenueLoading ? (
             <div className="h-[280px] flex items-center justify-center">
               <LoadingSpinner />
             </div>
-          ) : revenueQ.error ? (
+          ) : revenueError ? (
             <EmptyState
               title="Couldn't load revenue"
-              description={getErrorMessage(revenueQ.error)}
+              description={getErrorMessage(
+                revenueTrendQ.error ?? revenueQ.error,
+              )}
             />
-          ) : (revenueQ.data ?? []).length === 0 ? (
+          ) : revenuePoints.length === 0 ? (
             <EmptyState title="No revenue data for this range" />
           ) : (
             <RevenueAreaChart
-              points={revenueQ.data ?? []}
-              currency={DEFAULT_CURRENCY}
+              points={revenuePoints}
+              currency={activeCurrency}
             />
           )}
         </Card>
 
         <Card
           title="Driver status"
-          subtitle="Real-time"
+          subtitle={
+            region === "all"
+              ? "Real-time · all regions"
+              : `Real-time · ${regionLabel(region)}`
+          }
           right={
             <Link
               to="/live-dispatch"
@@ -368,7 +522,7 @@ export default function Home() {
             </Link>
           }
         >
-          {activeDriversQ.isLoading ? (
+          {driverStatusQ.isLoading && activeDriversQ.isLoading ? (
             <div className="h-[180px] flex items-center justify-center">
               <LoadingSpinner />
             </div>
@@ -377,19 +531,20 @@ export default function Home() {
               <StatusBar
                 label="On a ride"
                 value={onTrip}
-                total={activeDrivers.length || 1}
+                total={totalActive || 1}
                 color="bg-warning-500"
               />
               <StatusBar
                 label="Idle / available"
                 value={idle}
-                total={activeDrivers.length || 1}
+                total={totalActive || 1}
                 color="bg-success-500"
               />
-              <div className="grid grid-cols-3 gap-2 pt-2">
-                <MiniStat label="Active" value={activeDrivers.length} />
+              <div className="grid grid-cols-4 gap-2 pt-2">
+                <MiniStat label="Total" value={totalDrivers} />
+                <MiniStat label="Active" value={totalActive} tone="success" />
                 <MiniStat label="On trip" value={onTrip} tone="warning" />
-                <MiniStat label="Idle" value={idle} tone="success" />
+                <MiniStat label="Offline" value={offline} />
               </div>
             </div>
           )}
@@ -400,12 +555,12 @@ export default function Home() {
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PendingApprovalsCard
           drivers={pendingApprovals.slice(0, 5)}
-          loading={driversQ.isLoading}
-          totalPending={pendingApprovals.length}
+          loading={pendingApprovalsQ.isLoading && driversQ.isLoading}
+          totalPending={totalPending}
         />
         <LowRatedReviewsCard
           reviews={lowReviews}
-          loading={lowReviewsQ.isLoading}
+          loading={reviewsAttentionQ.isLoading && lowReviewsQ.isLoading}
         />
       </div>
 
@@ -413,23 +568,31 @@ export default function Home() {
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card
           className="lg:col-span-2"
-          title="Rides · last 30 days"
-          subtitle="Completed vs cancelled"
+          title={`Rides · last ${ridesDays} days`}
+          subtitle={
+            ridesTrendQ.data
+              ? `${ridesTrendQ.data.total.toLocaleString()} total · ${ridesTrendQ.data.completed.toLocaleString()} completed · ${ridesTrendQ.data.cancelled.toLocaleString()} cancelled`
+              : "Completed vs cancelled"
+          }
         >
-          {ridesTrendQ.isLoading ? (
+          {ridesLoading ? (
             <div className="h-[260px] flex items-center justify-center">
               <LoadingSpinner />
             </div>
-          ) : (ridesTrendQ.data ?? []).length === 0 ? (
+          ) : ridesPoints.length === 0 ? (
             <EmptyState title="No ride data for this range" />
           ) : (
-            <RidesBarChart points={ridesTrendQ.data ?? []} />
+            <RidesBarChart points={ridesPoints} />
           )}
         </Card>
 
         <Card
           title="Top drivers"
-          subtitle={`${range.from} → ${range.to}`}
+          subtitle={
+            topDriversQ.data
+              ? `Last ${topDriversQ.data.days} days`
+              : `${range.from} → ${range.to}`
+          }
           right={
             <Link
               to="/driver-tables"
@@ -439,7 +602,7 @@ export default function Home() {
             </Link>
           }
         >
-          {leaderboardQ.isLoading ? (
+          {topDriversQ.isLoading && leaderboardQ.isLoading ? (
             <div className="py-6">
               <LoadingSpinner />
             </div>
@@ -452,21 +615,35 @@ export default function Home() {
                   key={row.driverId}
                   className="flex items-center justify-between gap-3 py-3 text-sm"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
                       {i + 1}
                     </span>
+                    {row.driverImage && (
+                      <div className="h-8 w-8 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                        <img
+                          src={row.driverImage}
+                          alt=""
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              FALLBACK_AVATAR;
+                          }}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate font-medium text-gray-800 dark:text-white/90">
                         {row.driverName}
                       </p>
                       <p className="text-[11px] text-gray-500">
-                        {row.rides} rides · ★ {row.rating?.toFixed?.(1) ?? "—"}
+                        {row.rides} rides · ★{" "}
+                        {row.rating ? row.rating.toFixed(1) : "—"}
                       </p>
                     </div>
                   </div>
                   <span className="tabular-nums text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {formatCurrency(row.revenue, DEFAULT_CURRENCY)}
+                    {formatCurrency(row.revenue, activeCurrency)}
                   </span>
                 </li>
               ))}
@@ -488,7 +665,7 @@ export default function Home() {
           </Link>
         }
       >
-        {recentRidesQ.isLoading ? (
+        {latestRidesQ.isLoading && recentRidesQ.isLoading ? (
           <div className="py-6">
             <LoadingSpinner />
           </div>
@@ -524,7 +701,9 @@ export default function Home() {
                       {r.driverName ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-gray-500">
-                      {r.countryCode ? regionLabel(r.countryCode) : "—"}
+                      {r.countryCode
+                        ? regionLabel(r.countryCode as RegionCode)
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">
                       {r.fare !== undefined
@@ -532,7 +711,9 @@ export default function Home() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <RideStatusBadge status={r.status} />
+                      <RideStatusBadge
+                        status={r.status as Parameters<typeof RideStatusBadge>[0]["status"]}
+                      />
                     </td>
                     <td className="px-4 py-3 text-[11px] text-gray-500">
                       {r.createdAt ? formatDateTime(r.createdAt) : "—"}
@@ -599,22 +780,23 @@ function RegionSnapshotCard({
   code,
   label,
   currency,
-  activeDrivers,
-  activeRides,
+  totalDrivers,
+  onTripDrivers,
+  idleDrivers,
+  activeRidesNow,
   pendingApprovals,
   onSelect,
 }: {
   code: RegionCode;
   label: string;
   currency: string;
-  activeDrivers: Array<{ currentRideId?: string | null }>;
-  activeRides: unknown[];
+  totalDrivers: number;
+  onTripDrivers: number;
+  idleDrivers: number;
+  activeRidesNow: number;
   pendingApprovals: number;
   onSelect: () => void;
 }) {
-  const onTrip = activeDrivers.filter((d) => d.currentRideId).length;
-  const idle = activeDrivers.length - onTrip;
-
   return (
     <button
       type="button"
@@ -642,20 +824,24 @@ function RegionSnapshotCard({
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-lg bg-gray-50 p-2 text-center dark:bg-white/[0.02]">
           <p className="text-base font-semibold text-gray-800 dark:text-white/90">
-            {activeDrivers.length}
+            {totalDrivers}
           </p>
           <p className="text-[10px] uppercase tracking-wide text-gray-500">
             Drivers
           </p>
         </div>
         <div className="rounded-lg bg-gray-50 p-2 text-center dark:bg-white/[0.02]">
-          <p className="text-base font-semibold text-warning-600">{onTrip}</p>
+          <p className="text-base font-semibold text-warning-600">
+            {onTripDrivers}
+          </p>
           <p className="text-[10px] uppercase tracking-wide text-gray-500">
             On trip
           </p>
         </div>
         <div className="rounded-lg bg-gray-50 p-2 text-center dark:bg-white/[0.02]">
-          <p className="text-base font-semibold text-success-600">{idle}</p>
+          <p className="text-base font-semibold text-success-600">
+            {idleDrivers}
+          </p>
           <p className="text-[10px] uppercase tracking-wide text-gray-500">
             Idle
           </p>
@@ -665,7 +851,7 @@ function RegionSnapshotCard({
       <div className="mt-3 flex items-center justify-between text-xs">
         <span className="text-gray-500">Active rides now</span>
         <span className="font-semibold text-gray-800 dark:text-white/90">
-          {activeRides.length}
+          {activeRidesNow}
         </span>
       </div>
 

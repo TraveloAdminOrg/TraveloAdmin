@@ -12,11 +12,17 @@ interface ListEnvelope {
   meta: PaginationMeta;
 }
 
+interface SingleEnvelope {
+  transaction: Transaction;
+}
+
 export interface PaymentsListParams extends PaginationParams {
   status?: string;
   type?: string;
   direction?: string;
   method?: string;
+  // Lowercase country code (e.g. "pk") to filter by region.
+  region?: string;
   countryCode?: string;
   from?: string;
   to?: string;
@@ -31,6 +37,11 @@ export const paymentsApi = {
         transactions: r.data.data.transactions ?? [],
         meta: r.data.data.meta,
       })),
+
+  getById: (id: string) =>
+    apiClient
+      .get<ApiResponse<SingleEnvelope>>(ENDPOINTS.payments.byId(id))
+      .then((r) => r.data.data.transaction),
 
   remove: (id: string) =>
     apiClient

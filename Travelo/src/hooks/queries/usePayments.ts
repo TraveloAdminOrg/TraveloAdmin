@@ -11,6 +11,7 @@ export const paymentKeys = {
   lists: () => [...paymentKeys.all, "list"] as const,
   list: (params: PaymentsListParams) =>
     [...paymentKeys.lists(), params] as const,
+  detail: (id: string) => [...paymentKeys.all, "detail", id] as const,
 };
 
 export const usePaymentsQuery = (params: PaymentsListParams = {}) =>
@@ -18,6 +19,13 @@ export const usePaymentsQuery = (params: PaymentsListParams = {}) =>
     queryKey: paymentKeys.list(params),
     queryFn: () => paymentsApi.list(params),
     placeholderData: keepPreviousData,
+  });
+
+export const useTransactionQuery = (id: string) =>
+  useQuery({
+    queryKey: paymentKeys.detail(id),
+    queryFn: () => paymentsApi.getById(id),
+    enabled: !!id,
   });
 
 export const useDeletePayment = () => {

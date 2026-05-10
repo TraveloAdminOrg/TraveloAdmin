@@ -32,9 +32,11 @@ export interface TransactionUser {
 
 export interface TransactionWallet {
   _id: string;
-  userId: string;
   balance: number;
   currency: string;
+  // Optional fields — present in some payloads (older endpoints), omitted in
+  // the slimmer /admin/transactions response.
+  userId?: string;
   region?: string;
   isActive?: boolean;
   lastTransactionDate?: string;

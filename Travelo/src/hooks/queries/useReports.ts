@@ -4,6 +4,8 @@ import { reportsApi, type ReportRangeParams } from "../../api/reports.api";
 export const reportKeys = {
   overview: (params: ReportRangeParams) =>
     ["reports", "overview", params] as const,
+  leaderboard: (params: ReportRangeParams) =>
+    ["reports", "leaderboard", params] as const,
   revenue: (params: ReportRangeParams) =>
     ["reports", "revenue", params] as const,
   rides: (params: ReportRangeParams) =>
@@ -16,6 +18,12 @@ export const useReportOverviewQuery = (params: ReportRangeParams = {}) =>
   useQuery({
     queryKey: reportKeys.overview(params),
     queryFn: () => reportsApi.overview(params),
+  });
+
+export const useLeaderboardQuery = (params: ReportRangeParams = {}) =>
+  useQuery({
+    queryKey: reportKeys.leaderboard(params),
+    queryFn: () => reportsApi.leaderboard(params),
   });
 
 export const useRevenueReportQuery = (params: ReportRangeParams = {}) =>

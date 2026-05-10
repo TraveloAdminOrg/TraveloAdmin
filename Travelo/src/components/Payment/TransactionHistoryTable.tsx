@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
-import { ArrowDownLeft, ArrowUpRight, Search, Trash2, User } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Globe,
+  Search,
+  Trash2,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -21,7 +28,10 @@ import {
 } from "../../hooks/queries/usePayments";
 import { formatCurrency, formatDateTime } from "../../lib/format";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
+import { REGIONS, regionLabel, type RegionCode } from "../../lib/regions";
 import type { Transaction } from "../../types/payment";
+
+type RegionFilter = "all" | RegionCode;
 
 const STATUS_OPTIONS = ["All", "succeeded", "pending", "failed", "refunded"];
 const TYPE_OPTIONS = ["All", "wallet_topup", "ride_payment", "refund", "payout"];
@@ -51,6 +61,7 @@ const prettify = (s: string) =>
 export default function TransactionHistoryTable() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [region, setRegion] = useState<RegionFilter>("all");
   const [status, setStatus] = useState<string>("All");
   const [type, setType] = useState<string>("All");
   const [direction, setDirection] = useState<string>("All");
@@ -63,11 +74,12 @@ export default function TransactionHistoryTable() {
     () => ({
       page,
       limit,
+      ...(region !== "all" && { region: region.toLowerCase() }),
       ...(status !== "All" && { status }),
       ...(type !== "All" && { type }),
       ...(direction !== "All" && { direction }),
     }),
-    [page, limit, status, type, direction],
+    [page, limit, region, status, type, direction],
   );
 
   const { data, isLoading, isFetching, error } = usePaymentsQuery(params);
@@ -79,7 +91,7 @@ export default function TransactionHistoryTable() {
   // Reset to page 1 when filters change.
   useEffect(() => {
     setPage(1);
-  }, [status, type, direction, limit]);
+  }, [region, status, type, direction, limit]);
 
   // If the current page is past the new totalPages (e.g. after a delete), step back.
   useEffect(() => {
@@ -137,6 +149,7 @@ export default function TransactionHistoryTable() {
   };
 
   const clearFilters = () => {
+    setRegion("all");
     setStatus("All");
     setType("All");
     setDirection("All");
@@ -146,6 +159,7 @@ export default function TransactionHistoryTable() {
   };
 
   const hasActiveFilters =
+    region !== "all" ||
     status !== "All" ||
     type !== "All" ||
     direction !== "All" ||
@@ -155,6 +169,20 @@ export default function TransactionHistoryTable() {
 
   return (
     <div className="space-y-4">
+      {/* Region tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <RegionTabs region={region} onChange={setRegion} />
+        {meta && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {region === "all"
+              ? "All regions"
+              : regionLabel(region)}{" "}
+            · {meta.total.toLocaleString()} transaction
+            {meta.total === 1 ? "" : "s"}
+          </p>
+        )}
+      </div>
+
       {/* Filter bar */}
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-end gap-3">
@@ -321,6 +349,12 @@ export default function TransactionHistoryTable() {
                     </TableCell>
                     <TableCell
                       isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Region
+                    </TableCell>
+                    <TableCell
+                      isHeader
                       className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400"
                     >
                       Amount
@@ -413,6 +447,21 @@ export default function TransactionHistoryTable() {
                           </span>
                         </TableCell>
 
+                        <TableCell className="px-5 py-4 text-start text-theme-sm text-gray-600 dark:text-gray-300">
+                          {tx.user?.country ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] uppercase text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                {tx.user.country}
+                              </span>
+                              <span className="text-xs">
+                                {regionLabel(tx.user.country as RegionCode)}
+                              </span>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+
                         <TableCell
                           className={`px-5 py-4 text-end font-semibold text-theme-sm ${
                             isCredit
@@ -495,6 +544,51 @@ export default function TransactionHistoryTable() {
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
       />
+    </div>
+  );
+}
+
+function RegionTabs({
+  region,
+  onChange,
+}: {
+  region: RegionFilter;
+  onChange: (r: RegionFilter) => void;
+}) {
+  const tabs: { value: RegionFilter; label: string; flag?: string }[] = [
+    { value: "all", label: "All regions" },
+    ...REGIONS.map((r) => ({
+      value: r.code as RegionFilter,
+      label: r.label,
+      flag: r.code,
+    })),
+  ];
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+      {tabs.map((t) => {
+        const active = region === t.value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => onChange(t.value)}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              active
+                ? "bg-brand-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+          >
+            {t.value === "all" ? (
+              <Globe className="size-3.5" />
+            ) : (
+              <span className="font-mono text-[10px] tracking-wide">
+                {t.flag}
+              </span>
+            )}
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
