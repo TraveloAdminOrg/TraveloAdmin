@@ -20,18 +20,10 @@ export const useReviewsQuery = (params: ReviewsListParams = {}) =>
     placeholderData: keepPreviousData,
   });
 
-export const useHideReview = () => {
+export const useDeleteReview = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => reviewsApi.hide(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: reviewKeys.lists() }),
-  });
-};
-
-export const useUnhideReview = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => reviewsApi.unhide(id),
+    mutationFn: (id: string) => reviewsApi.remove(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: reviewKeys.lists() }),
   });
 };

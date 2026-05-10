@@ -29,13 +29,13 @@ export const ENDPOINTS = {
     byDriver: (driverId: string) => `/admin/drivers/${driverId}/rides`,
   },
   payments: {
-    base: "/admin/transactions/",
-    byId: (id: string) => `/admin/transactions/${id}`,
-    refund: (id: string) => `/admin/transactions/${id}/refund`,
+    base: "/transaction/",
+    byId: (id: string) => `/transaction/${id}`,
+    refund: (id: string) => `/transaction/${id}/refund`,
   },
   reviews: {
-    base: "/admin/reviews/",
-    byId: (id: string) => `/admin/reviews/${id}`,
+    base: "/review/",
+    byId: (id: string) => `/review/${id}`,
   },
   notifications: {
     base: "/admin/notifications/",
@@ -43,8 +43,8 @@ export const ENDPOINTS = {
     send: "/admin/notifications/send",
   },
   adverts: {
-    base: "/admin/adverts/",
-    byId: (id: string) => `/admin/adverts/${id}`,
+    base: "/ad/",
+    byId: (id: string) => `/ad/${id}`,
   },
   dispatch: {
     activeDrivers: "/admin/dispatch/active-drivers",
@@ -66,9 +66,12 @@ export const ENDPOINTS = {
     byId: (id: string) => `/roles/${id}`,
     permissions: "/roles/permissions",
   },
+  // Content is keyed by `type` (e.g. privacy_policy) — there's no list endpoint.
   content: {
-    base: "/content",
-    byId: (id: string) => `/content/${id}`,
+    add: "/content/add",
+    get: "/content/get",
+    edit: "/content/edit",
+    remove: "/content/delete",
   },
   rideTypes: {
     base: "/rideType/",
@@ -88,5 +91,8 @@ export const ENDPOINTS = {
   faqs: {
     base: "/faq/",
     byId: (id: string) => `/faq/${id}`,
+  },
+  dashboard: {
+    kpis: "/adminDashboard/",
   },
 } as const;

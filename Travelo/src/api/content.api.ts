@@ -1,33 +1,49 @@
 import { apiClient } from "./client";
 import { ENDPOINTS } from "./endpoints";
+import type { ApiResponse } from "../types/api";
 
-// TODO: Replace `unknown` with a real ContentItem type once the backend shape is known.
 export interface ContentItem {
-  id: string;
-  title: string;
-  slug?: string;
-  body?: string;
-  status?: "draft" | "published";
+  _id: string;
+  type: string;
+  text: string;
+  createdAt?: string;
   updatedAt?: string;
 }
 
+interface SingleEnvelope {
+  content: ContentItem;
+}
+
 export const contentApi = {
-  list: () =>
-    apiClient.get<ContentItem[]>(ENDPOINTS.content.base).then((r) => r.data),
-
-  getById: (id: string) =>
+  // GET /content/get?type=xxx
+  get: (type: string) =>
     apiClient
-      .get<ContentItem>(ENDPOINTS.content.byId(id))
-      .then((r) => r.data),
+      .get<ApiResponse<SingleEnvelope>>(ENDPOINTS.content.get, {
+        params: { type },
+      })
+      .then((r) => r.data.data.content),
 
-  create: (data: Partial<ContentItem>) =>
-    apiClient.post<ContentItem>(ENDPOINTS.content.base, data).then((r) => r.data),
-
-  update: (id: string, data: Partial<ContentItem>) =>
+  // POST /content/add  body: { type, text }
+  create: (data: { type: string; text: string }) =>
     apiClient
-      .patch<ContentItem>(ENDPOINTS.content.byId(id), data)
-      .then((r) => r.data),
+      .post<ApiResponse<SingleEnvelope>>(ENDPOINTS.content.add, data)
+      .then((r) => r.data.data.content),
 
-  remove: (id: string) =>
-    apiClient.delete(ENDPOINTS.content.byId(id)).then((r) => r.data),
+  // PATCH /content/edit?type=xxx  body: { text }
+  update: (type: string, text: string) =>
+    apiClient
+      .patch<ApiResponse<SingleEnvelope>>(
+        ENDPOINTS.content.edit,
+        { text },
+        { params: { type } },
+      )
+      .then((r) => r.data.data.content),
+
+  // DELETE /content/delete?type=xxx
+  remove: (type: string) =>
+    apiClient
+      .delete<ApiResponse<SingleEnvelope>>(ENDPOINTS.content.remove, {
+        params: { type },
+      })
+      .then((r) => r.data.data.content),
 };

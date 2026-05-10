@@ -14,10 +14,13 @@ interface ListEnvelope {
 
 export interface PaymentsListParams extends PaginationParams {
   status?: string;
+  type?: string;
+  direction?: string;
   method?: string;
   countryCode?: string;
   from?: string;
   to?: string;
+  search?: string;
 }
 
 export const paymentsApi = {
@@ -28,6 +31,11 @@ export const paymentsApi = {
         transactions: r.data.data.transactions ?? [],
         meta: r.data.data.meta,
       })),
+
+  remove: (id: string) =>
+    apiClient
+      .delete<ApiResponse<{ id: string }>>(ENDPOINTS.payments.byId(id))
+      .then((r) => r.data.data),
 
   refund: (id: string, amount?: number) =>
     apiClient

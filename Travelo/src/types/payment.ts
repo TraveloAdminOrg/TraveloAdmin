@@ -9,22 +9,52 @@ export type TransactionStatus =
 
 export type PaymentMethod = "card" | "wallet" | "cash" | "upi" | "bank" | "other";
 
-// TODO: Align with real backend Transaction shape once payload is shared.
+export type TransactionType =
+  | "wallet_topup"
+  | "ride_payment"
+  | "refund"
+  | "payout"
+  | "adjustment";
+
+export type TransactionDirection = "credit" | "debit";
+
+export interface TransactionUser {
+  _id: string;
+  username?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  image?: string;
+  type?: string;
+  country?: string;
+  city?: string;
+}
+
+export interface TransactionWallet {
+  _id: string;
+  userId: string;
+  balance: number;
+  currency: string;
+  region?: string;
+  isActive?: boolean;
+  lastTransactionDate?: string;
+}
+
 export interface Transaction {
   _id: string;
-  rideId?: string;
-  userId?: string;
-  userName?: string;
-  driverId?: string;
-  driverName?: string;
+  user?: TransactionUser;
+  wallet?: TransactionWallet;
+  type: TransactionType | string;
+  direction: TransactionDirection;
   amount: number;
   currency: string;
-  method: PaymentMethod;
-  status: TransactionStatus;
+  status: TransactionStatus | string;
+  stripePaymentIntentId?: string;
+  rideId?: string;
   countryCode?: RegionCode;
   refundedAmount?: number;
   failureReason?: string;
-  gatewayReference?: string;
+  method?: PaymentMethod;
   createdAt?: string;
   updatedAt?: string;
 }

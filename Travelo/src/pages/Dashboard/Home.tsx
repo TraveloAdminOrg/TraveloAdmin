@@ -26,11 +26,11 @@ import Button from "../../components/ui/button/Button";
 import RevenueAreaChart from "../../components/dashboard/RevenueAreaChart";
 import RidesBarChart from "../../components/dashboard/RidesBarChart";
 import {
-  useReportOverviewQuery,
   useRevenueReportQuery,
   useRidesReportQuery,
   useDriversReportQuery,
 } from "../../hooks/queries/useReports";
+import { useDashboardKpisQuery } from "../../hooks/queries/useDashboard";
 import {
   useActiveDriversQuery,
   useActiveDispatchRidesQuery,
@@ -72,7 +72,7 @@ export default function Home() {
     [region],
   );
 
-  const overviewQ = useReportOverviewQuery(range);
+  const kpisQ = useDashboardKpisQuery();
   const revenueQ = useRevenueReportQuery(range);
   const ridesTrendQ = useRidesReportQuery(range);
   const leaderboardQ = useDriversReportQuery(range);
@@ -87,7 +87,8 @@ export default function Home() {
   const driversQ = useDriversQuery({ page: 1, limit: 50 });
   const lowReviewsQ = useReviewsQuery({ page: 1, limit: 5, maxRating: 3 });
 
-  const overview = overviewQ.data;
+  const kpis = kpisQ.data;
+  const DEFAULT_CURRENCY = "USD";
   const allActiveDrivers = activeDriversQ.data ?? [];
   const allActiveRides = activeRidesQ.data ?? [];
   const recentRides = recentRidesQ.data?.rides ?? [];
@@ -192,20 +193,20 @@ export default function Home() {
         <Kpi
           label="Today's revenue"
           value={
-            overview
-              ? formatCurrency(overview.todayRevenue, overview.currency)
+            kpis
+              ? formatCurrency(kpis.totalTodayRevenue, DEFAULT_CURRENCY)
               : "—"
           }
           icon={<CircleDollarSign className="size-5" />}
           tone="success"
-          loading={overviewQ.isLoading}
+          loading={kpisQ.isLoading}
         />
         <Kpi
           label="Today's rides"
-          value={overview ? overview.todayRides.toLocaleString() : "—"}
+          value={kpis ? kpis.totalTodayRides.toLocaleString() : "—"}
           icon={<Car className="size-5" />}
           tone="brand"
-          loading={overviewQ.isLoading}
+          loading={kpisQ.isLoading}
         />
         <Kpi
           label="Active drivers"
@@ -216,58 +217,74 @@ export default function Home() {
         />
         <Kpi
           label="Pending approvals"
-          value={pendingApprovals.length.toLocaleString()}
+          value={
+            kpis
+              ? kpis.totalPendingApprovals.toLocaleString()
+              : pendingApprovals.length.toLocaleString()
+          }
           icon={<ShieldCheck className="size-5" />}
-          tone={pendingApprovals.length > 0 ? "warning" : "neutral"}
-          loading={driversQ.isLoading}
+          tone={
+            (kpis?.totalPendingApprovals ?? pendingApprovals.length) > 0
+              ? "warning"
+              : "neutral"
+          }
+          loading={kpisQ.isLoading}
           href="/driver-approvals"
-          actionable={pendingApprovals.length > 0}
+          actionable={(kpis?.totalPendingApprovals ?? 0) > 0}
         />
         <Kpi
           label="Active users"
-          value={overview ? overview.activeUsers.toLocaleString() : "—"}
+          value={kpis ? kpis.todayActiveUsers.toLocaleString() : "—"}
           icon={<Users className="size-5" />}
           tone="brand"
-          loading={overviewQ.isLoading}
+          loading={kpisQ.isLoading}
         />
         <Kpi
           label="Cancellation rate"
           value={
-            overview ? `${(overview.cancellationRate * 100).toFixed(1)}%` : "—"
+            kpis ? `${kpis.totalCancellationRate.toFixed(1)}%` : "—"
           }
           icon={
-            overview && overview.cancellationRate > 0.1 ? (
+            kpis && kpis.totalCancellationRate > 10 ? (
               <TrendingUp className="size-5" />
             ) : (
               <TrendingDown className="size-5" />
             )
           }
           tone={
-            overview && overview.cancellationRate > 0.15
+            kpis && kpis.totalCancellationRate > 15
               ? "error"
-              : overview && overview.cancellationRate > 0.08
+              : kpis && kpis.totalCancellationRate > 8
                 ? "warning"
                 : "success"
           }
-          loading={overviewQ.isLoading}
+          loading={kpisQ.isLoading}
         />
         <Kpi
           label="Average fare"
           value={
-            overview
-              ? formatCurrency(overview.averageFare, overview.currency)
+            kpis
+              ? formatCurrency(kpis.totalTodayAverageFare, DEFAULT_CURRENCY)
               : "—"
           }
           icon={<BarChart3 className="size-5" />}
           tone="brand"
-          loading={overviewQ.isLoading}
+          loading={kpisQ.isLoading}
         />
         <Kpi
           label="Active rides now"
-          value={activeRides.length.toLocaleString()}
+          value={
+            kpis
+              ? kpis.totalActiveRides.toLocaleString()
+              : activeRides.length.toLocaleString()
+          }
           icon={<Car className="size-5" />}
-          tone={activeRides.length > 0 ? "success" : "neutral"}
-          loading={activeRidesQ.isLoading}
+          tone={
+            (kpis?.totalActiveRides ?? activeRides.length) > 0
+              ? "success"
+              : "neutral"
+          }
+          loading={kpisQ.isLoading}
           href="/live-dispatch"
         />
       </div>
@@ -307,17 +324,10 @@ export default function Home() {
         <Card
           className="lg:col-span-2"
           title="Revenue · last 30 days"
-          subtitle={
-            overview
-              ? `Total period: ${formatCurrency(
-                  (revenueQ.data ?? []).reduce(
-                    (s, p) => s + (p.amount || 0),
-                    0,
-                  ),
-                  overview.currency,
-                )}`
-              : ""
-          }
+          subtitle={`Total period: ${formatCurrency(
+            (revenueQ.data ?? []).reduce((s, p) => s + (p.amount || 0), 0),
+            DEFAULT_CURRENCY,
+          )}`}
           right={
             <Link
               to="/reports"
@@ -341,7 +351,7 @@ export default function Home() {
           ) : (
             <RevenueAreaChart
               points={revenueQ.data ?? []}
-              currency={overview?.currency ?? "USD"}
+              currency={DEFAULT_CURRENCY}
             />
           )}
         </Card>
@@ -456,9 +466,7 @@ export default function Home() {
                     </div>
                   </div>
                   <span className="tabular-nums text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {overview
-                      ? formatCurrency(row.revenue, overview.currency)
-                      : row.revenue}
+                    {formatCurrency(row.revenue, DEFAULT_CURRENCY)}
                   </span>
                 </li>
               ))}
@@ -967,11 +975,10 @@ function LowRatedReviewsCard({
 }: {
   reviews: Array<{
     _id: string;
-    rating: number;
-    comment?: string;
-    reviewerName?: string;
-    subjectName?: string;
-    direction: string;
+    customerRating: number;
+    customerFeedback?: string;
+    customer?: string;
+    driver?: string;
     createdAt?: string;
   }>;
   loading?: boolean;
@@ -1005,15 +1012,15 @@ function LowRatedReviewsCard({
           {reviews.map((r) => (
             <li key={r._id} className="py-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  {r.reviewerName ?? "—"} → {r.subjectName ?? "—"}
+                <p className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                  Driver {r.driver ? `${r.driver.slice(0, 6)}…` : "—"}
                 </p>
                 <span className="inline-flex items-center gap-0.5 text-xs">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Star
                       key={i}
                       className={`size-3 ${
-                        i < r.rating
+                        i < Math.round(r.customerRating)
                           ? "fill-warning-500 text-warning-500"
                           : "text-gray-300 dark:text-gray-600"
                       }`}
@@ -1021,9 +1028,9 @@ function LowRatedReviewsCard({
                   ))}
                 </span>
               </div>
-              {r.comment && (
+              {r.customerFeedback && (
                 <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
-                  "{r.comment}"
+                  "{r.customerFeedback}"
                 </p>
               )}
               {r.createdAt && (

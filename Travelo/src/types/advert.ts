@@ -1,49 +1,25 @@
-import type { RegionCode } from "../lib/regions";
-
-export type AdvertPlacement =
-  | "home_banner"
-  | "ride_complete"
-  | "splash"
-  | "side_drawer"
-  | "promo_card"
-  | "other";
-
-export type AdvertAudience = "all" | "users" | "drivers";
-
-// TODO: Align with backend Advert/Banner entity.
 export interface Advert {
   _id: string;
+  createdBy?: string;
   title: string;
   description?: string;
-  imageUrl: string;
-  ctaUrl?: string;
-  ctaLabel?: string;
-  placement: AdvertPlacement;
-  audience: AdvertAudience;
-  countryCode?: RegionCode;
-  startsAt?: string;
-  endsAt?: string;
+  actionLink?: string;
+  image: string;
+  altText?: string;
+  priority: number;
   isActive: boolean;
-  priority?: number;
-  impressions?: number;
-  clicks?: number;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export type AdvertCreateInput = {
+// Form-data input for create/update. `image` may be a File (new upload) or
+// omitted (keep existing). All other fields are plain text/number/boolean.
+export interface AdvertFormInput {
   title: string;
   description?: string;
-  imageUrl: string;
-  ctaUrl?: string;
-  ctaLabel?: string;
-  placement: AdvertPlacement;
-  audience: AdvertAudience;
-  countryCode?: RegionCode;
-  startsAt?: string;
-  endsAt?: string;
+  actionLink?: string;
+  altText?: string;
+  priority: number;
   isActive: boolean;
-  priority?: number;
-};
-
-export type AdvertUpdateInput = Partial<AdvertCreateInput>;
+  image?: File;
+}

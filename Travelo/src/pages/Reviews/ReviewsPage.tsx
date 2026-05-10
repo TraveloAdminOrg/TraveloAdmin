@@ -1,69 +1,80 @@
-import { useEffect, useState } from "react";
-import { Eye, EyeOff, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import PageMeta from "../../components/common/PageMeta";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import Pagination from "../../components/common/Pagination";
-import Button from "../../components/ui/button/Button";
+import DeleteConfirmDialog from "../../components/common/DeleteConfirmDialog";
 import {
+  useDeleteReview,
   useReviewsQuery,
-  useHideReview,
-  useUnhideReview,
 } from "../../hooks/queries/useReviews";
-import { formatDate } from "../../lib/format";
-import { getErrorMessage } from "../../lib/error";
-import type { ReviewDirection } from "../../types/review";
-
-const FALLBACK_AVATAR = "/images/user/owner.jpg";
-const DIRECTIONS: { value: ReviewDirection | "all"; label: string }[] = [
-  { value: "all", label: "All directions" },
-  { value: "rider_to_driver", label: "Rider → Driver" },
-  { value: "driver_to_rider", label: "Driver → Rider" },
-];
+import { formatDateTime } from "../../lib/format";
+import { getErrorMessage, isNotFoundError } from "../../lib/error";
+import type { Review } from "../../types/review";
 
 function Stars({ value }: { value: number }) {
+  // Floor for full stars; show half-star indicator if fractional ≥ .25.
+  const full = Math.floor(value);
+  const hasHalf = value - full >= 0.25 && value - full < 0.75;
   return (
     <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          className={`size-3.5 ${
-            n <= value
-              ? "fill-warning-400 text-warning-400"
-              : "text-gray-300 dark:text-gray-600"
-          }`}
-        />
-      ))}
-      <span className="ml-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const isFull = n <= full;
+        const isHalf = !isFull && n === full + 1 && hasHalf;
+        return (
+          <span key={n} className="relative inline-block">
+            <Star
+              className={`size-4 ${
+                isFull
+                  ? "fill-warning-400 text-warning-400"
+                  : "text-gray-300 dark:text-gray-600"
+              }`}
+            />
+            {isHalf && (
+              <Star
+                className="absolute inset-0 size-4 fill-warning-400 text-warning-400"
+                style={{ clipPath: "inset(0 50% 0 0)" }}
+              />
+            )}
+          </span>
+        );
+      })}
+      <span className="ml-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
         {value.toFixed(1)}
       </span>
     </div>
   );
 }
 
+const shortId = (id?: string) => (id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "—");
+
 export default function ReviewsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [direction, setDirection] = useState<ReviewDirection | "all">("all");
   const [minRating, setMinRating] = useState<number | "all">("all");
+  const [search, setSearch] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Review | null>(null);
 
-  const { data, isLoading, isFetching, error } = useReviewsQuery({
-    page,
-    limit,
-    direction: direction === "all" ? undefined : direction,
-    minRating: minRating === "all" ? undefined : minRating,
-  });
+  const params = useMemo(
+    () => ({
+      page,
+      limit,
+      ...(minRating !== "all" && { minRating }),
+    }),
+    [page, limit, minRating],
+  );
 
-  const hideMutation = useHideReview();
-  const unhideMutation = useUnhideReview();
+  const { data, isLoading, isFetching, error } = useReviewsQuery(params);
+  const deleteMutation = useDeleteReview();
 
   const reviews = data?.reviews ?? [];
   const meta = data?.meta;
 
   useEffect(() => {
     setPage(1);
-  }, [direction, minRating]);
+  }, [minRating, limit]);
 
   useEffect(() => {
     if (meta && page > meta.totalPages && meta.totalPages > 0) {
@@ -71,19 +82,33 @@ export default function ReviewsPage() {
     }
   }, [meta, page]);
 
-  const onToggleHide = async (id: string, hidden: boolean) => {
+  // Client-side text search across feedback / customer / driver / ride ids on the current page.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return reviews;
+    return reviews.filter((r) =>
+      [r.customerFeedback, r.customer, r.driver, r.ride, r._id]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [reviews, search]);
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
     try {
-      if (hidden) {
-        await unhideMutation.mutateAsync(id);
-        toast.success("Review unhidden");
-      } else {
-        await hideMutation.mutateAsync(id);
-        toast.success("Review hidden");
-      }
+      await deleteMutation.mutateAsync(pendingDelete._id);
+      toast.success("Review deleted");
+      setPendingDelete(null);
     } catch (err) {
-      toast.error(getErrorMessage(err));
+      if (isNotFoundError(err)) {
+        toast.error("Review not found.");
+      } else {
+        toast.error(getErrorMessage(err));
+      }
     }
   };
+
+  const hasActiveFilters = minRating !== "all" || search.trim() !== "";
 
   return (
     <>
@@ -97,40 +122,66 @@ export default function ReviewsPage() {
           Reviews & Ratings
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {meta ? `${meta.total} reviews total.` : "All ride reviews."}
+          {meta
+            ? `${meta.total} review${meta.total === 1 ? "" : "s"} total.`
+            : "Customer ratings and feedback for completed rides."}
         </p>
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
-        <select
-          value={direction}
-          onChange={(e) =>
-            setDirection(e.target.value as ReviewDirection | "all")
-          }
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-        >
-          {DIRECTIONS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={minRating}
-          onChange={(e) =>
-            setMinRating(
-              e.target.value === "all" ? "all" : Number(e.target.value),
-            )
-          }
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-        >
-          <option value="all">Any rating</option>
-          <option value={1}>1 star and up</option>
-          <option value={2}>2 stars and up</option>
-          <option value={3}>3 stars and up</option>
-          <option value={4}>4 stars and up</option>
-          <option value={5}>5 stars only</option>
-        </select>
+      {/* Filters */}
+      <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Search
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                placeholder="Feedback, customer, driver, ride id…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Minimum rating
+            </label>
+            <select
+              value={minRating}
+              onChange={(e) =>
+                setMinRating(
+                  e.target.value === "all" ? "all" : Number(e.target.value),
+                )
+              }
+              className="h-10 appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-3 text-sm text-gray-700 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 [&::-ms-expand]:hidden"
+            >
+              <option value="all">Any rating</option>
+              <option value={1}>1★ and up</option>
+              <option value={2}>2★ and up</option>
+              <option value={3}>3★ and up</option>
+              <option value={4}>4★ and up</option>
+              <option value={5}>5★ only</option>
+            </select>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setMinRating("all");
+                setSearch("");
+              }}
+              className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -140,86 +191,85 @@ export default function ReviewsPage() {
           title="Failed to load reviews"
           description={getErrorMessage(error)}
         />
-      ) : reviews.length === 0 ? (
-        <EmptyState title="No reviews found" />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title={hasActiveFilters ? "No matching reviews" : "No reviews yet"}
+          description={
+            hasActiveFilters
+              ? "Try adjusting or clearing the filters."
+              : "Reviews will appear here once customers rate their rides."
+          }
+        />
       ) : (
         <>
           <div
-            className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${
+            className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${
               isFetching ? "opacity-70 transition" : ""
             }`}
           >
-            {reviews.map((r) => (
+            {filtered.map((r) => (
               <div
                 key={r._id}
-                className={`rounded-2xl border p-4 transition ${
-                  r.isHidden
-                    ? "border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-white/[0.02]"
-                    : "border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-                }`}
+                className="group relative rounded-2xl border border-gray-200 bg-white p-5 transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
               >
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                    <img
-                      src={r.reviewerImage || FALLBACK_AVATAR}
-                      alt={r.reviewerName ?? "Reviewer"}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src =
-                          FALLBACK_AVATAR;
-                      }}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
-                        {r.reviewerName ?? "Anonymous"}
-                      </h3>
-                      <Stars value={r.rating} />
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {r.direction === "rider_to_driver"
-                        ? "Rider → Driver"
-                        : "Driver → Rider"}
-                      {" · "}
-                      <span className="text-gray-600 dark:text-gray-300">
-                        {r.subjectName ?? "Unknown"}
-                      </span>
-                      {r.createdAt && ` · ${formatDate(r.createdAt)}`}
-                    </p>
-                    {r.comment && (
-                      <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                        {r.comment}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center gap-2">
-                      {r.isFlagged && (
-                        <span className="rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-medium uppercase text-warning-700 dark:bg-warning-500/10 dark:text-warning-400">
-                          Flagged
-                        </span>
-                      )}
-                      {r.isHidden && (
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                          Hidden
-                        </span>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onToggleHide(r._id, !!r.isHidden)}
-                        startIcon={
-                          r.isHidden ? (
-                            <Eye className="size-3.5" />
-                          ) : (
-                            <EyeOff className="size-3.5" />
-                          )
-                        }
-                      >
-                        {r.isHidden ? "Unhide" : "Hide"}
-                      </Button>
-                    </div>
-                  </div>
+                <div className="flex items-start justify-between gap-3">
+                  <Stars value={r.customerRating} />
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(r)}
+                    aria-label="Delete review"
+                    title="Delete review"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 opacity-0 transition hover:bg-error-50 hover:text-error-500 group-hover:opacity-100 dark:hover:bg-error-500/10"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
+
+                {r.customerFeedback ? (
+                  <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
+                    “{r.customerFeedback}”
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm italic text-gray-400 dark:text-gray-500">
+                    No written feedback.
+                  </p>
+                )}
+
+                <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
+                  <div>
+                    <dt className="text-gray-400 dark:text-gray-500">Customer</dt>
+                    <dd
+                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
+                      title={r.customer}
+                    >
+                      {shortId(r.customer)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 dark:text-gray-500">Driver</dt>
+                    <dd
+                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
+                      title={r.driver}
+                    >
+                      {shortId(r.driver)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 dark:text-gray-500">Ride</dt>
+                    <dd
+                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
+                      title={r.ride}
+                    >
+                      {shortId(r.ride)}
+                    </dd>
+                  </div>
+                </dl>
+
+                {r.createdAt && (
+                  <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">
+                    {formatDateTime(r.createdAt)}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -232,16 +282,26 @@ export default function ReviewsPage() {
                 total={meta.total}
                 limit={meta.limit}
                 onPageChange={setPage}
-                onLimitChange={(l) => {
-                  setLimit(l);
-                  setPage(1);
-                }}
+                onLimitChange={setLimit}
                 isLoading={isFetching}
               />
             </div>
           )}
         </>
       )}
+
+      <DeleteConfirmDialog
+        isOpen={!!pendingDelete}
+        title="Delete this review?"
+        description={
+          pendingDelete
+            ? `Review ${pendingDelete._id} will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDelete(null)}
+      />
     </>
   );
 }

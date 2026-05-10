@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { advertsApi } from "../../api/adverts.api";
 import type { PaginationParams } from "../../types/api";
-import type { AdvertCreateInput, AdvertUpdateInput } from "../../types/advert";
+import type { AdvertFormInput } from "../../types/advert";
 
 export const advertKeys = {
   all: ["adverts"] as const,
@@ -25,7 +25,7 @@ export const useAdvertsQuery = (params: PaginationParams = {}) =>
 export const useCreateAdvert = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: AdvertCreateInput) => advertsApi.create(data),
+    mutationFn: (data: AdvertFormInput) => advertsApi.create(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: advertKeys.lists() }),
   });
 };
@@ -33,7 +33,7 @@ export const useCreateAdvert = () => {
 export const useUpdateAdvert = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: AdvertUpdateInput }) =>
+    mutationFn: ({ id, data }: { id: string; data: AdvertFormInput }) =>
       advertsApi.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: advertKeys.lists() }),
   });
