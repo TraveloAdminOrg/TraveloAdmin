@@ -10,16 +10,49 @@ export interface ActiveDriver extends Driver {
   currentRideId?: string | null;
 }
 
-export const dispatchApi = {
-  activeDrivers: () =>
-    apiClient
-      .get<ApiResponse<{ drivers: ActiveDriver[] }>>(
-        ENDPOINTS.dispatch.activeDrivers,
-      )
-      .then((r) => r.data.data.drivers ?? []),
+export interface DispatchOverview {
+  region: string;
+  activeDrivers: number;
+  activeRides: number;
+  onRide: number;
+  idleDrivers: number;
+}
 
-  activeRides: () =>
+export interface ActiveDriversResponse {
+  region: string;
+  total: number;
+  drivers: ActiveDriver[];
+}
+
+export interface ActiveRidesResponse {
+  region: string;
+  total: number;
+  rides: Ride[];
+}
+
+const regionParams = (region?: string) =>
+  region ? { region } : undefined;
+
+export const dispatchApi = {
+  overview: (region?: string) =>
     apiClient
-      .get<ApiResponse<{ rides: Ride[] }>>(ENDPOINTS.dispatch.activeRides)
-      .then((r) => r.data.data.rides ?? []),
+      .get<ApiResponse<DispatchOverview>>(ENDPOINTS.dispatch.overview, {
+        params: regionParams(region),
+      })
+      .then((r) => r.data.data),
+
+  activeDrivers: (region?: string) =>
+    apiClient
+      .get<ApiResponse<ActiveDriversResponse>>(
+        ENDPOINTS.dispatch.activeDrivers,
+        { params: regionParams(region) },
+      )
+      .then((r) => r.data.data),
+
+  activeRides: (region?: string) =>
+    apiClient
+      .get<ApiResponse<ActiveRidesResponse>>(ENDPOINTS.dispatch.activeRides, {
+        params: regionParams(region),
+      })
+      .then((r) => r.data.data),
 };

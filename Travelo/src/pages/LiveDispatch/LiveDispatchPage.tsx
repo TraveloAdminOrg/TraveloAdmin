@@ -1,24 +1,54 @@
-import { Map, Users, Car, Activity } from "lucide-react";
+import { useState } from "react";
+import {
+  Activity,
+  Car,
+  Globe,
+  Map,
+  Users,
+  UserCheck,
+  Zap,
+} from "lucide-react";
 import PageMeta from "../../components/common/PageMeta";
 import PageHeader from "../../components/common/PageHeader";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import RideStatusBadge from "../../components/Rides/RideStatusBadge";
 import {
-  useActiveDriversQuery,
   useActiveDispatchRidesQuery,
+  useActiveDriversQuery,
+  useDispatchOverviewQuery,
 } from "../../hooks/queries/useDispatch";
-import { regionLabel } from "../../lib/regions";
+import { REGIONS, regionLabel, type RegionCode } from "../../lib/regions";
 import { formatDateTime } from "../../lib/format";
+
+type RegionFilter = "all" | RegionCode;
 
 const FALLBACK_AVATAR = "/images/user/owner.jpg";
 
 export default function LiveDispatchPage() {
-  const driversQuery = useActiveDriversQuery();
-  const ridesQuery = useActiveDispatchRidesQuery();
+  const [region, setRegion] = useState<RegionFilter>("all");
+
+  // Pass the region only when a specific country is selected; otherwise the
+  // backend returns the global aggregate.
+  const regionParam = region === "all" ? undefined : region.toLowerCase();
+
+  const overviewQuery = useDispatchOverviewQuery(regionParam);
+  const driversQuery = useActiveDriversQuery(regionParam);
+  const ridesQuery = useActiveDispatchRidesQuery(regionParam);
 
   const drivers = driversQuery.data ?? [];
   const rides = ridesQuery.data ?? [];
+  const overview = overviewQuery.data;
+
+  // Prefer server overview values; fall back to client-side counts so the UI
+  // never renders blank while the overview query is in flight.
+  const activeDriverCount =
+    overview?.activeDrivers ?? drivers.length;
+  const activeRideCount = overview?.activeRides ?? rides.length;
+  const onRideCount =
+    overview?.onRide ?? drivers.filter((d) => d.currentRideId).length;
+  const idleCount =
+    overview?.idleDrivers ?? drivers.filter((d) => !d.currentRideId).length;
 
   return (
     <>
@@ -39,35 +69,49 @@ export default function LiveDispatchPage() {
         }
       />
 
+      {/* Region tabs */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <RegionTabs region={region} onChange={setRegion} />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {region === "all"
+            ? "Showing all regions"
+            : `Showing ${regionLabel(region)}`}
+        </p>
+      </div>
+
       {/* KPI strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Active drivers"
-          value={drivers.length}
-          icon={<Users className="size-5" />}
-          loading={driversQuery.isLoading}
+          value={activeDriverCount}
+          icon={<UserCheck className="size-5" />}
+          tone="brand"
+          loading={overviewQuery.isLoading && driversQuery.isLoading}
         />
         <KpiCard
           label="Active rides"
-          value={rides.length}
+          value={activeRideCount}
           icon={<Car className="size-5" />}
-          loading={ridesQuery.isLoading}
+          tone="brand"
+          loading={overviewQuery.isLoading && ridesQuery.isLoading}
         />
         <KpiCard
           label="On a ride"
-          value={drivers.filter((d) => d.currentRideId).length}
-          icon={<Car className="size-5" />}
-          loading={driversQuery.isLoading}
+          value={onRideCount}
+          icon={<Zap className="size-5" />}
+          tone="warning"
+          loading={overviewQuery.isLoading && driversQuery.isLoading}
         />
         <KpiCard
           label="Idle drivers"
-          value={drivers.filter((d) => !d.currentRideId).length}
+          value={idleCount}
           icon={<Users className="size-5" />}
-          loading={driversQuery.isLoading}
+          tone="success"
+          loading={overviewQuery.isLoading && driversQuery.isLoading}
         />
       </div>
 
-      {/* Map placeholder + side panel */}
+      {/* Map placeholder + active rides side panel */}
       <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:col-span-2">
           <div className="flex h-[420px] flex-col items-center justify-center gap-3 p-6 text-center">
@@ -85,10 +129,13 @@ export default function LiveDispatchPage() {
 
         {/* Active rides side panel */}
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <div className="border-b border-gray-100 p-4 dark:border-gray-800">
+          <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-gray-800">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
               Active rides
             </h3>
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+              {activeRideCount}
+            </span>
           </div>
           <div className="max-h-[368px] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800">
             {ridesQuery.isLoading ? (
@@ -114,9 +161,11 @@ export default function LiveDispatchPage() {
                   <div className="mt-1 text-gray-700 dark:text-gray-300">
                     {r.userName ?? "—"} → {r.driverName ?? "—"}
                   </div>
-                  <div className="mt-0.5 truncate text-gray-500 dark:text-gray-400">
-                    {r.pickup?.address}
-                  </div>
+                  {r.pickup?.address && (
+                    <div className="mt-0.5 truncate text-gray-500 dark:text-gray-400">
+                      {r.pickup.address}
+                    </div>
+                  )}
                   {r.requestedAt && (
                     <div className="mt-0.5 text-[10px] text-gray-400">
                       {formatDateTime(r.requestedAt)}
@@ -131,10 +180,13 @@ export default function LiveDispatchPage() {
 
       {/* Active drivers grid */}
       <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div className="border-b border-gray-100 p-4 dark:border-gray-800">
+        <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-gray-800">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">
-            Active drivers ({drivers.length})
+            Active drivers
           </h3>
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+            {activeDriverCount}
+          </span>
         </div>
         {driversQuery.isLoading ? (
           <div className="p-6">
@@ -144,7 +196,11 @@ export default function LiveDispatchPage() {
           <div className="p-6">
             <EmptyState
               title="No active drivers"
-              description="Drivers go online from the driver app."
+              description={
+                region === "all"
+                  ? "Drivers go online from the driver app."
+                  : `No drivers active in ${regionLabel(region)} right now.`
+              }
             />
           </div>
         ) : (
@@ -190,27 +246,79 @@ export default function LiveDispatchPage() {
   );
 }
 
+function RegionTabs({
+  region,
+  onChange,
+}: {
+  region: RegionFilter;
+  onChange: (r: RegionFilter) => void;
+}) {
+  const tabs: { value: RegionFilter; label: string; flag?: string }[] = [
+    { value: "all", label: "All regions" },
+    ...REGIONS.map((r) => ({
+      value: r.code as RegionFilter,
+      label: r.label,
+      flag: r.code,
+    })),
+  ];
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+      {tabs.map((t) => {
+        const active = region === t.value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => onChange(t.value)}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              active
+                ? "bg-brand-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+          >
+            {t.value === "all" ? (
+              <Globe className="size-3.5" />
+            ) : (
+              <span className="font-mono text-[10px] tracking-wide">
+                {t.flag}
+              </span>
+            )}
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function KpiCard({
   label,
   value,
   icon,
   loading,
+  tone = "brand",
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   loading?: boolean;
+  tone?: "brand" | "success" | "warning";
 }) {
+  const toneClass: Record<string, string> = {
+    brand: "text-brand-500",
+    success: "text-success-500",
+    warning: "text-warning-500",
+  };
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-start justify-between">
         <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
           {label}
         </p>
-        <span className="text-gray-400">{icon}</span>
+        <span className={toneClass[tone]}>{icon}</span>
       </div>
       <p className="mt-2 text-2xl font-semibold text-gray-800 dark:text-white/90">
-        {loading ? "…" : value}
+        {loading ? "…" : value.toLocaleString()}
       </p>
     </div>
   );

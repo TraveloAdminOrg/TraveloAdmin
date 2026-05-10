@@ -48,8 +48,9 @@ export const ENDPOINTS = {
     byId: (id: string) => `/ad/${id}`,
   },
   dispatch: {
-    activeDrivers: "/admin/dispatch/active-drivers",
-    activeRides: "/admin/dispatch/active-rides",
+    overview: "/admin/live-dispatch/overview",
+    activeDrivers: "/admin/live-dispatch/active-drivers",
+    activeRides: "/admin/live-dispatch/active-rides",
   },
   reports: {
     overview: "/report/overview",
