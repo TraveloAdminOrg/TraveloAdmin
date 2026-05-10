@@ -20,6 +20,14 @@ export const usePaymentsQuery = (params: PaymentsListParams = {}) =>
     placeholderData: keepPreviousData,
   });
 
+export const useDeletePayment = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => paymentsApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: paymentKeys.lists() }),
+  });
+};
+
 export const useRefundPayment = () => {
   const qc = useQueryClient();
   return useMutation({

@@ -13,10 +13,8 @@ interface ListEnvelope {
 }
 
 export interface ReviewsListParams extends PaginationParams {
-  direction?: string;
   minRating?: number;
   maxRating?: number;
-  flagged?: boolean;
 }
 
 export const reviewsApi = {
@@ -28,17 +26,8 @@ export const reviewsApi = {
         meta: r.data.data.meta,
       })),
 
-  hide: (id: string) =>
+  remove: (id: string) =>
     apiClient
-      .patch<ApiResponse<{ review: Review }>>(ENDPOINTS.reviews.byId(id), {
-        isHidden: true,
-      })
-      .then((r) => r.data.data.review),
-
-  unhide: (id: string) =>
-    apiClient
-      .patch<ApiResponse<{ review: Review }>>(ENDPOINTS.reviews.byId(id), {
-        isHidden: false,
-      })
-      .then((r) => r.data.data.review),
+      .delete<ApiResponse<{ id: string }>>(ENDPOINTS.reviews.byId(id))
+      .then((r) => r.data.data),
 };

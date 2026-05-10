@@ -1,8 +1,16 @@
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  ImagePlus,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import PageMeta from "../../components/common/PageMeta";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
@@ -18,52 +26,37 @@ import {
   useUpdateAdvert,
   useDeleteAdvert,
 } from "../../hooks/queries/useAdverts";
-import { REGIONS } from "../../lib/regions";
-import { formatDate } from "../../lib/format";
+import { formatDateTime } from "../../lib/format";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
-import type {
-  Advert,
-  AdvertAudience,
-  AdvertPlacement,
-} from "../../types/advert";
+import type { Advert } from "../../types/advert";
 
-const PLACEMENT_OPTIONS: { value: AdvertPlacement; label: string }[] = [
-  { value: "home_banner", label: "Home banner" },
-  { value: "ride_complete", label: "Ride complete" },
-  { value: "splash", label: "Splash" },
-  { value: "side_drawer", label: "Side drawer" },
-  { value: "promo_card", label: "Promo card" },
-  { value: "other", label: "Other" },
-];
-
-const AUDIENCE_OPTIONS: { value: AdvertAudience; label: string }[] = [
-  { value: "all", label: "Everyone" },
-  { value: "users", label: "Users only" },
-  { value: "drivers", label: "Drivers only" },
-];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
 const advertSchema = z.object({
   title: z.string().trim().min(2, "Title is too short").max(80),
   description: z.string().trim().max(300).optional().or(z.literal("")),
-  imageUrl: z.string().trim().min(1, "Image URL required"),
-  ctaUrl: z.string().trim().optional().or(z.literal("")),
-  ctaLabel: z.string().trim().max(40).optional().or(z.literal("")),
-  placement: z.enum([
-    "home_banner",
-    "ride_complete",
-    "splash",
-    "side_drawer",
-    "promo_card",
-    "other",
-  ]),
-  audience: z.enum(["all", "users", "drivers"]),
-  countryCode: z.enum(["PK", "MT", "GB"]).optional().or(z.literal("")),
-  startsAt: z.string().optional().or(z.literal("")),
-  endsAt: z.string().optional().or(z.literal("")),
+  actionLink: z
+    .string()
+    .trim()
+    .url("Must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  altText: z.string().trim().max(120).optional().or(z.literal("")),
+  priority: z.coerce.number().int().min(0).max(100),
   isActive: z.boolean(),
-  priority: z.number().min(0).max(100).optional(),
+  image: z
+    .instanceof(File)
+    .optional()
+    .refine(
+      (f) => !f || f.size <= MAX_IMAGE_BYTES,
+      "Image must be 5MB or smaller",
+    )
+    .refine(
+      (f) => !f || f.type.startsWith("image/"),
+      "File must be an image",
+    ),
 });
-type AdvertInput = z.infer<typeof advertSchema>;
+type AdvertFormValues = z.infer<typeof advertSchema>;
 
 const inputClasses =
   "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -71,9 +64,15 @@ const inputClasses =
 export default function AdvertsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">(
+    "all",
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<Advert | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Advert | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data, isLoading, isFetching, error } = useAdvertsQuery({
     page,
@@ -92,33 +91,65 @@ export default function AdvertsPage() {
     }
   }, [meta, page]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return adverts.filter((a) => {
+      if (statusFilter === "active" && !a.isActive) return false;
+      if (statusFilter === "inactive" && a.isActive) return false;
+      if (!q) return true;
+      return [a.title, a.description, a.actionLink, a.altText, a._id]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [adverts, search, statusFilter]);
+
   const {
     register,
     handleSubmit,
     reset,
+    control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
-  } = useForm<AdvertInput>({
+  } = useForm<AdvertFormValues>({
     resolver: zodResolver(advertSchema),
     mode: "onTouched",
     defaultValues: {
       title: "",
       description: "",
-      imageUrl: "",
-      ctaUrl: "",
-      ctaLabel: "",
-      placement: "home_banner",
-      audience: "all",
-      countryCode: "",
-      startsAt: "",
-      endsAt: "",
-      isActive: true,
+      actionLink: "",
+      altText: "",
       priority: 0,
+      isActive: true,
+      image: undefined,
     },
   });
 
+  const watchedImage = watch("image");
+
+  // Sync the live preview URL with the selected file (revoking the old object URL).
+  useEffect(() => {
+    if (!watchedImage) {
+      setImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(watchedImage);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [watchedImage]);
+
   const openCreate = () => {
     setEditing(null);
-    reset();
+    reset({
+      title: "",
+      description: "",
+      actionLink: "",
+      altText: "",
+      priority: 0,
+      isActive: true,
+      image: undefined,
+    });
+    setImagePreview(null);
     setIsFormOpen(true);
   };
 
@@ -127,30 +158,38 @@ export default function AdvertsPage() {
     reset({
       title: a.title,
       description: a.description ?? "",
-      imageUrl: a.imageUrl,
-      ctaUrl: a.ctaUrl ?? "",
-      ctaLabel: a.ctaLabel ?? "",
-      placement: a.placement,
-      audience: a.audience,
-      countryCode: a.countryCode ?? "",
-      startsAt: a.startsAt ? a.startsAt.slice(0, 16) : "",
-      endsAt: a.endsAt ? a.endsAt.slice(0, 16) : "",
-      isActive: a.isActive,
+      actionLink: a.actionLink ?? "",
+      altText: a.altText ?? "",
       priority: a.priority ?? 0,
+      isActive: a.isActive,
+      image: undefined,
     });
+    setImagePreview(a.image || null);
     setIsFormOpen(true);
   };
 
-  const onSubmit = async (values: AdvertInput) => {
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setEditing(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const onSubmit = async (values: AdvertFormValues) => {
+    // Image is required when creating, optional when editing (keeps existing).
+    if (!editing && !values.image) {
+      toast.error("Please choose an image for the advert.");
+      return;
+    }
     try {
       const payload = {
-        ...values,
-        countryCode: values.countryCode || undefined,
-        startsAt: values.startsAt || undefined,
-        endsAt: values.endsAt || undefined,
+        title: values.title,
         description: values.description || undefined,
-        ctaUrl: values.ctaUrl || undefined,
-        ctaLabel: values.ctaLabel || undefined,
+        actionLink: values.actionLink || undefined,
+        altText: values.altText || undefined,
+        priority: values.priority,
+        isActive: values.isActive,
+        image: values.image,
       };
       if (editing) {
         await updateMut.mutateAsync({ id: editing._id, data: payload });
@@ -159,7 +198,7 @@ export default function AdvertsPage() {
         await createMut.mutateAsync(payload);
         toast.success("Advert created");
       }
-      setIsFormOpen(false);
+      closeForm();
     } catch (err) {
       toast.error(getErrorMessage(err));
     }
@@ -173,7 +212,7 @@ export default function AdvertsPage() {
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
-        toast.error("Delete isn't available yet — backend endpoint not implemented.");
+        toast.error("Advert not found.");
       } else {
         toast.error(getErrorMessage(err));
       }
@@ -190,11 +229,11 @@ export default function AdvertsPage() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
-            Adverts & Banners
+            Adverts &amp; Banners
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {meta
-              ? `${meta.total} advert${meta.total === 1 ? "" : "s"}.`
+              ? `${meta.total} advert${meta.total === 1 ? "" : "s"} · lower priority shows first.`
               : "In-app banners and promotional cards."}
           </p>
         </div>
@@ -203,18 +242,75 @@ export default function AdvertsPage() {
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Search
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                placeholder="Title, description, alt text, link…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as "all" | "active" | "inactive")
+              }
+              className="h-10 appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-8 text-sm text-gray-700 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 [&::-ms-expand]:hidden"
+            >
+              <option value="all">All</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </select>
+          </div>
+
+          {(search || statusFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+              }}
+              className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <LoadingSpinner fullPage label="Loading adverts…" />
       ) : error ? (
         <EmptyState title="Failed to load" description={getErrorMessage(error)} />
-      ) : adverts.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
-          title="No adverts yet"
-          description="Create your first banner to surface in the apps."
+          title={adverts.length === 0 ? "No adverts yet" : "No matching adverts"}
+          description={
+            adverts.length === 0
+              ? "Create your first banner to surface in the apps."
+              : "Try adjusting or clearing the filters."
+          }
           action={
-            <Button size="sm" onClick={openCreate} startIcon={<Plus className="size-4" />}>
-              New advert
-            </Button>
+            adverts.length === 0 && (
+              <Button size="sm" onClick={openCreate} startIcon={<Plus className="size-4" />}>
+                New advert
+              </Button>
+            )
           }
         />
       ) : (
@@ -224,31 +320,35 @@ export default function AdvertsPage() {
               isFetching ? "opacity-70 transition" : ""
             }`}
           >
-            {adverts.map((a) => (
+            {filtered.map((a) => (
               <div
                 key={a._id}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
               >
-                <div className="relative h-36 bg-gray-100 dark:bg-gray-800">
+                <div className="relative aspect-[16/9] bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900">
                   <img
-                    src={a.imageUrl}
-                    alt={a.title}
+                    src={a.image}
+                    alt={a.altText || a.title}
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
                     className="h-full w-full object-cover"
                   />
                   <span
-                    className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                    className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide backdrop-blur ${
                       a.isActive
                         ? "bg-success-500/90 text-white"
-                        : "bg-gray-500/90 text-white"
+                        : "bg-gray-700/80 text-white"
                     }`}
                   >
                     {a.isActive ? "Active" : "Inactive"}
                   </span>
+                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white backdrop-blur">
+                    P{a.priority}
+                  </span>
                 </div>
-                <div className="p-4">
+
+                <div className="flex flex-1 flex-col p-4">
                   <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
                     {a.title}
                   </h3>
@@ -257,32 +357,24 @@ export default function AdvertsPage() {
                       {a.description}
                     </p>
                   )}
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-                      {a.placement.replace(/_/g, " ")}
-                    </span>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                      {a.audience}
-                    </span>
-                    {a.countryCode && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        {a.countryCode}
-                      </span>
-                    )}
-                  </div>
-                  {(a.startsAt || a.endsAt) && (
-                    <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                      {a.startsAt && `From ${formatDate(a.startsAt)}`}
-                      {a.startsAt && a.endsAt && " · "}
-                      {a.endsAt && `Until ${formatDate(a.endsAt)}`}
+                  {a.actionLink && (
+                    <a
+                      href={a.actionLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                    >
+                      <ExternalLink className="size-3 shrink-0" />
+                      <span className="truncate">{a.actionLink}</span>
+                    </a>
+                  )}
+                  {a.updatedAt && (
+                    <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+                      Updated {formatDateTime(a.updatedAt)}
                     </p>
                   )}
-                  {(a.impressions !== undefined || a.clicks !== undefined) && (
-                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      {a.impressions ?? 0} impressions · {a.clicks ?? 0} clicks
-                    </p>
-                  )}
-                  <div className="mt-3 flex items-center justify-end gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+
+                  <div className="mt-auto flex items-center justify-end gap-1 border-t border-gray-100 pt-3 dark:border-gray-800">
                     <button
                       type="button"
                       onClick={() => openEdit(a)}
@@ -327,19 +419,109 @@ export default function AdvertsPage() {
       {/* Form modal */}
       <Modal
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        onClose={closeForm}
         className="max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
       >
         <h2 className="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
           {editing ? "Edit advert" : "New advert"}
         </h2>
+        <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">
+          {editing
+            ? "Leave the image empty to keep the existing one."
+            : "Upload an image, set the title and link, and save."}
+        </p>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+          {/* Image uploader with live preview */}
           <div>
-            <Label>Title <span className="text-error-500">*</span></Label>
-            <input className={inputClasses} {...register("title")} />
-            {errors.title && <p className="mt-1 text-xs text-error-500">{errors.title.message}</p>}
+            <Label>
+              Image{" "}
+              {!editing && <span className="text-error-500">*</span>}
+            </Label>
+            <Controller
+              name="image"
+              control={control}
+              render={({ field }) => (
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 sm:w-56 dark:border-gray-700 dark:bg-white/[0.02]">
+                    {imagePreview ? (
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-gray-400">
+                        <ImagePlus className="size-6" />
+                        <span className="text-xs">No image</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-1 flex-col items-start justify-center gap-2">
+                    <input
+                      ref={(el) => {
+                        fileInputRef.current = el;
+                      }}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        field.onChange(file);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      startIcon={<Upload className="size-3.5" />}
+                    >
+                      {field.value || (editing && imagePreview)
+                        ? "Replace image"
+                        : "Choose image"}
+                    </Button>
+                    {field.value && (
+                      <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {field.value.name} ·{" "}
+                        {(field.value.size / 1024).toFixed(1)} KB
+                      </p>
+                    )}
+                    {field.value && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          field.onChange(undefined);
+                          if (fileInputRef.current) fileInputRef.current.value = "";
+                          if (editing) setImagePreview(editing.image);
+                        }}
+                        className="text-xs font-medium text-error-500 hover:underline"
+                      >
+                        Remove selection
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            />
+            {errors.image && (
+              <p className="mt-1 text-xs text-error-500">
+                {String(errors.image.message)}
+              </p>
+            )}
           </div>
+
+          <div>
+            <Label>
+              Title <span className="text-error-500">*</span>
+            </Label>
+            <input className={inputClasses} {...register("title")} />
+            {errors.title && (
+              <p className="mt-1 text-xs text-error-500">{errors.title.message}</p>
+            )}
+          </div>
+
           <div>
             <Label>Description</Label>
             <textarea
@@ -347,96 +529,103 @@ export default function AdvertsPage() {
               className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
               {...register("description")}
             />
-          </div>
-          <div>
-            <Label>Image URL <span className="text-error-500">*</span></Label>
-            <input className={inputClasses} {...register("imageUrl")} />
-            {errors.imageUrl && (
-              <p className="mt-1 text-xs text-error-500">{errors.imageUrl.message}</p>
+            {errors.description && (
+              <p className="mt-1 text-xs text-error-500">
+                {errors.description.message}
+              </p>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Label>CTA label</Label>
-              <input className={inputClasses} {...register("ctaLabel")} />
-            </div>
-            <div>
-              <Label>CTA URL</Label>
-              <input className={inputClasses} {...register("ctaUrl")} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <Label>Placement</Label>
-              <select className={inputClasses} {...register("placement")}>
-                {PLACEMENT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Audience</Label>
-              <select className={inputClasses} {...register("audience")}>
-                {AUDIENCE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Region (optional)</Label>
-              <select className={inputClasses} {...register("countryCode")}>
-                <option value="">All regions</option>
-                {REGIONS.map((r) => (
-                  <option key={r.code} value={r.code}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Starts at</Label>
-              <input
-                type="datetime-local"
-                className={inputClasses}
-                {...register("startsAt")}
-              />
-            </div>
-            <div>
-              <Label>Ends at</Label>
-              <input
-                type="datetime-local"
-                className={inputClasses}
-                {...register("endsAt")}
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+
+          <div>
+            <Label>Action link</Label>
             <input
-              type="checkbox"
-              id="isActive"
-              {...register("isActive")}
-              className="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              type="url"
+              placeholder="https://…"
+              className={inputClasses}
+              {...register("actionLink")}
             />
-            <label
-              htmlFor="isActive"
-              className="text-sm text-gray-700 dark:text-gray-300"
-            >
-              Active
-            </label>
+            {errors.actionLink && (
+              <p className="mt-1 text-xs text-error-500">
+                {errors.actionLink.message}
+              </p>
+            )}
           </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Alt text</Label>
+              <input
+                className={inputClasses}
+                placeholder="Accessibility description"
+                {...register("altText")}
+              />
+              {errors.altText && (
+                <p className="mt-1 text-xs text-error-500">
+                  {errors.altText.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Priority</Label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className={inputClasses}
+                {...register("priority")}
+              />
+              <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+                Lower numbers appear first.
+              </p>
+              {errors.priority && (
+                <p className="mt-1 text-xs text-error-500">
+                  {errors.priority.message}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Active toggle */}
+          <Controller
+            name="isActive"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-white/[0.02]">
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                    Active
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Inactive adverts are hidden from the apps.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={field.value}
+                  onClick={() => setValue("isActive", !field.value, { shouldDirty: true })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+                    field.value
+                      ? "bg-brand-500"
+                      : "bg-gray-300 dark:bg-gray-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block size-5 transform rounded-full bg-white shadow transition ${
+                      field.value ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+          />
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsFormOpen(false)}
+              onClick={closeForm}
               disabled={isSubmitting}
             >
               Cancel
