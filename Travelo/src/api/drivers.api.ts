@@ -5,14 +5,22 @@ import type {
   PaginationMeta,
   PaginationParams,
 } from "../types/api";
-import type { Driver } from "../types/driver";
+import type { Driver, DriverDocuments } from "../types/driver";
 
+// `/admin/drivers/:id` returns the driver with `driverDocuments` nested inside.
 interface SingleEnvelope {
   driver: Driver;
 }
 
+// `/admin/drivers/?page=&limit=` returns each entry as a wrapper object so we
+// can correlate the driver row with its (separately-loaded) documents.
+interface ListEntry {
+  driver: Omit<Driver, "driverDocuments">;
+  driverDocuments?: DriverDocuments;
+}
+
 interface ListEnvelope {
-  drivers: Driver[];
+  drivers: ListEntry[];
   meta: PaginationMeta;
 }
 
@@ -27,10 +35,15 @@ export const driversApi = {
       .get<ApiResponse<ListEnvelope>>(ENDPOINTS.drivers.base, {
         params: { page, limit },
       })
-      .then((r) => ({
-        drivers: r.data.data.drivers ?? [],
-        meta: r.data.data.meta,
-      })),
+      .then((r) => {
+        // Flatten { driver, driverDocuments } so consumers see a Driver[]
+        // identical in shape to what `getById` returns.
+        const drivers: Driver[] = (r.data.data.drivers ?? []).map((entry) => ({
+          ...entry.driver,
+          driverDocuments: entry.driverDocuments,
+        }));
+        return { drivers, meta: r.data.data.meta };
+      }),
 
   getById: (id: string) =>
     apiClient

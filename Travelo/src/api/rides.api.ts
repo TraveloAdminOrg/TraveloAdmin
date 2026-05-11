@@ -12,13 +12,21 @@ interface ListEnvelope {
   meta: PaginationMeta;
 }
 
+// `byUser` / `byDriver` add a `userType` discriminator on the meta so the UI
+// can tell whether the subject is a customer or a driver without a second call.
+interface ByPersonListEnvelope {
+  rides: Ride[];
+  meta: PaginationMeta & { userType?: "customer" | "driver" | string };
+}
+
 interface SingleEnvelope {
   ride: Ride;
 }
 
 export interface RidesListParams extends PaginationParams {
   status?: string;
-  countryCode?: string;
+  // Region code (e.g. "PK", "MT") — the backend stores the code on each ride.
+  region?: string;
   driverId?: string;
   userId?: string;
   from?: string; // ISO date
@@ -43,4 +51,31 @@ export const ridesApi = {
     apiClient
       .get<ApiResponse<{ rides: Ride[] }>>(ENDPOINTS.rides.active)
       .then((r) => r.data.data.rides ?? []),
+
+  byUser: (
+    userId: string,
+    { page = 1, limit = 10 }: PaginationParams = {},
+  ) =>
+    apiClient
+      .get<ApiResponse<ByPersonListEnvelope>>(ENDPOINTS.rides.byUser(userId), {
+        params: { page, limit },
+      })
+      .then((r) => ({
+        rides: r.data.data.rides ?? [],
+        meta: r.data.data.meta,
+      })),
+
+  byDriver: (
+    driverId: string,
+    { page = 1, limit = 10 }: PaginationParams = {},
+  ) =>
+    apiClient
+      .get<ApiResponse<ByPersonListEnvelope>>(
+        ENDPOINTS.rides.byDriver(driverId),
+        { params: { page, limit } },
+      )
+      .then((r) => ({
+        rides: r.data.data.rides ?? [],
+        meta: r.data.data.meta,
+      })),
 };

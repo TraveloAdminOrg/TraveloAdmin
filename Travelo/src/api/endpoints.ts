@@ -26,8 +26,8 @@ export const ENDPOINTS = {
     base: "/admin/rides/",
     byId: (id: string) => `/admin/rides/${id}`,
     active: "/admin/rides/active",
-    byUser: (userId: string) => `/admin/users/${userId}/rides`,
-    byDriver: (driverId: string) => `/admin/drivers/${driverId}/rides`,
+    byUser: (userId: string) => `/admin/rides/by-user/${userId}`,
+    byDriver: (driverId: string) => `/admin/rides/by-driver/${driverId}`,
   },
   payments: {
     base: "/admin/transactions/",
@@ -35,8 +35,8 @@ export const ENDPOINTS = {
     refund: (id: string) => `/admin/transactions/${id}/refund`,
   },
   reviews: {
-    base: "/review/",
-    byId: (id: string) => `/review/${id}`,
+    base: "/admin/reviews/",
+    byId: (id: string) => `/admin/reviews/${id}`,
   },
   notifications: {
     base: "/admin/notifications/",

@@ -3,7 +3,6 @@ import {
   Activity,
   Car,
   Globe,
-  Map,
   Users,
   UserCheck,
   Zap,
@@ -13,6 +12,7 @@ import PageHeader from "../../components/common/PageHeader";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import RideStatusBadge from "../../components/Rides/RideStatusBadge";
+import DispatchMap from "../../components/LiveDispatch/DispatchMap";
 import {
   useActiveDispatchRidesQuery,
   useActiveDriversQuery,
@@ -111,19 +111,15 @@ export default function LiveDispatchPage() {
         />
       </div>
 
-      {/* Map placeholder + active rides side panel */}
+      {/* Live map + active rides side panel */}
       <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:col-span-2">
-          <div className="flex h-[420px] flex-col items-center justify-center gap-3 p-6 text-center">
-            <Map className="size-12 text-gray-300 dark:text-gray-600" />
-            <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-              Map view
-            </h3>
-            <p className="max-w-md text-sm text-gray-500 dark:text-gray-400">
-              Real-time pins for active drivers and rides will render here.
-              Requires a map library (e.g. Mapbox, Leaflet, Google Maps) — wire
-              up once the map provider + API key are decided.
-            </p>
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:col-span-2">
+          <DispatchMap drivers={drivers} rides={rides} region={region} />
+          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 px-4 py-2 text-[11px] text-gray-500 dark:border-gray-800 dark:text-gray-400">
+            <LegendDot color="#10b981" label="Idle driver" />
+            <LegendDot color="#f59e0b" label="Driver on ride" />
+            <LegendDot color="#3b82f6" label="Pickup" />
+            <LegendDot color="#ef4444" label="Drop-off" />
           </div>
         </div>
 
@@ -150,29 +146,45 @@ export default function LiveDispatchPage() {
                 />
               </div>
             ) : (
-              rides.map((r) => (
-                <div key={r._id} className="p-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-gray-500">
-                      {r._id.slice(-8)}
-                    </span>
-                    <RideStatusBadge status={r.status} />
-                  </div>
-                  <div className="mt-1 text-gray-700 dark:text-gray-300">
-                    {r.userName ?? "—"} → {r.driverName ?? "—"}
-                  </div>
-                  {r.pickup?.address && (
-                    <div className="mt-0.5 truncate text-gray-500 dark:text-gray-400">
-                      {r.pickup.address}
+              rides.map((r) => {
+                // userId/driverId may be a populated object or a bare id.
+                const userName =
+                  typeof r.userId === "object" && r.userId
+                    ? r.userId.fullName || r.userId.username
+                    : undefined;
+                const driverName =
+                  typeof r.driverId === "object" && r.driverId
+                    ? r.driverId.fullName || r.driverId.username
+                    : undefined;
+                const origin = r.origin?.coordinates;
+                const originLabel =
+                  origin && origin.length >= 2
+                    ? `${origin[1].toFixed(4)}, ${origin[0].toFixed(4)}`
+                    : undefined;
+                return (
+                  <div key={r._id} className="p-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] text-gray-500">
+                        {r._id.slice(-8)}
+                      </span>
+                      <RideStatusBadge status={r.status} />
                     </div>
-                  )}
-                  {r.requestedAt && (
-                    <div className="mt-0.5 text-[10px] text-gray-400">
-                      {formatDateTime(r.requestedAt)}
+                    <div className="mt-1 text-gray-700 dark:text-gray-300">
+                      {userName ?? "—"} → {driverName ?? "—"}
                     </div>
-                  )}
-                </div>
-              ))
+                    {originLabel && (
+                      <div className="mt-0.5 truncate text-gray-500 dark:text-gray-400">
+                        {originLabel}
+                      </div>
+                    )}
+                    {r.createdAt && (
+                      <div className="mt-0.5 text-[10px] text-gray-400">
+                        {formatDateTime(r.createdAt)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -288,6 +300,19 @@ function RegionTabs({
         );
       })}
     </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        aria-hidden
+        className="inline-block size-2.5 rounded-full"
+        style={{ background: color }}
+      />
+      {label}
+    </span>
   );
 }
 

@@ -71,7 +71,7 @@ export default function HelpAndSupport() {
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
-        toast.error("Delete isn't available yet — backend endpoint not implemented.");
+        toast.error("That FAQ was already removed.");
       } else {
         toast.error(getErrorMessage(err));
       }
