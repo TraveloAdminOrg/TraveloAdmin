@@ -15,7 +15,7 @@ import {
   LayoutDashboard,
   FileText,
   HelpCircle,
-  UserCog,
+  // UserCog, // used by the hidden Role Management nav entry below
   ChevronRight,
 } from "lucide-react";
 import { useSidebar } from "../context/SidebarContext";
@@ -112,11 +112,14 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <HelpCircle size={20} />,
         path: "/help-support",
       },
-      {
-        name: "Role Management",
-        icon: <UserCog size={20} />,
-        path: "/role-management",
-      },
+      // Hidden — Role Management is intentionally suppressed from the nav.
+      // Restore by uncommenting this block (icon import stays so the entry
+      // can be re-enabled without touching imports).
+      // {
+      //   name: "Role Management",
+      //   icon: <UserCog size={20} />,
+      //   path: "/role-management",
+      // },
     ],
   },
 ];

@@ -27,7 +27,7 @@ const NAV_TARGETS: NavTarget[] = [
   { path: "/ride-types", label: "Ride Types", keywords: ["vehicles"] },
   { path: "/content-management", label: "Content Management" },
   { path: "/help-support", label: "Help & Support" },
-  { path: "/role-management", label: "Role Management" },
+  // { path: "/role-management", label: "Role Management" }, // hidden
 ];
 
 function pathTitle(path: string): string {

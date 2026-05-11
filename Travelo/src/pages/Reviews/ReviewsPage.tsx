@@ -12,7 +12,9 @@ import {
 } from "../../hooks/queries/useReviews";
 import { formatDateTime } from "../../lib/format";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
-import type { Review } from "../../types/review";
+import type { Review, ReviewPerson, ReviewRide } from "../../types/review";
+
+const FALLBACK_AVATAR = "/images/user/owner.jpg";
 
 function Stars({ value }: { value: number }) {
   // Floor for full stars; show half-star indicator if fractional ≥ .25.
@@ -48,7 +50,55 @@ function Stars({ value }: { value: number }) {
   );
 }
 
-const shortId = (id?: string) => (id ? `${id.slice(0, 6)}…${id.slice(-4)}` : "—");
+// Defensive readers for ride/customer/driver — they can be populated objects
+// (current API) or bare ObjectId strings (older shape).
+const personObj = (
+  p: Review["customer"] | Review["driver"],
+): ReviewPerson | null => (p && typeof p === "object" ? p : null);
+
+const personName = (p: Review["customer"] | Review["driver"]): string => {
+  if (!p) return "—";
+  if (typeof p === "string") return `${p.slice(0, 6)}…${p.slice(-4)}`;
+  return p.fullName || p.username || p.email || p._id.slice(-8) || "—";
+};
+
+const personImage = (
+  p: Review["customer"] | Review["driver"],
+): string | undefined => {
+  if (!p || typeof p === "string") return undefined;
+  return p.image;
+};
+
+const rideObj = (r: Review["ride"]): ReviewRide | null =>
+  r && typeof r === "object" ? r : null;
+
+const rideId = (r: Review["ride"]): string | undefined =>
+  !r ? undefined : typeof r === "string" ? r : r._id;
+
+// Search across populated names, emails, phones, ids — anything an admin
+// might paste into the box.
+function reviewMatchesSearch(r: Review, q: string): boolean {
+  const c = personObj(r.customer);
+  const d = personObj(r.driver);
+  const haystack: (string | undefined)[] = [
+    r._id,
+    r.customerFeedback,
+    rideId(r.ride),
+    typeof r.customer === "string" ? r.customer : c?._id,
+    typeof r.driver === "string" ? r.driver : d?._id,
+    c?.fullName,
+    c?.username,
+    c?.email,
+    c?.phone,
+    d?.fullName,
+    d?.username,
+    d?.email,
+    d?.phone,
+  ];
+  return haystack
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .some((s) => s.toLowerCase().includes(q));
+}
 
 export default function ReviewsPage() {
   const [page, setPage] = useState(1);
@@ -82,15 +132,11 @@ export default function ReviewsPage() {
     }
   }, [meta, page]);
 
-  // Client-side text search across feedback / customer / driver / ride ids on the current page.
+  // Client-side text search across the populated fields on the current page.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return reviews;
-    return reviews.filter((r) =>
-      [r.customerFeedback, r.customer, r.driver, r.ride, r._id]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
+    return reviews.filter((r) => reviewMatchesSearch(r, q));
   }, [reviews, search]);
 
   const confirmDelete = async () => {
@@ -101,7 +147,7 @@ export default function ReviewsPage() {
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
-        toast.error("Review not found.");
+        toast.error("That review was already removed.");
       } else {
         toast.error(getErrorMessage(err));
       }
@@ -131,7 +177,7 @@ export default function ReviewsPage() {
       {/* Filters */}
       <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[220px]">
+          <div className="min-w-0 flex-1 sm:min-w-[220px]">
             <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
               Search
             </label>
@@ -139,7 +185,7 @@ export default function ReviewsPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="search"
-                placeholder="Feedback, customer, driver, ride id…"
+                placeholder="Feedback, customer, driver, phone, ride id…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -208,69 +254,11 @@ export default function ReviewsPage() {
             }`}
           >
             {filtered.map((r) => (
-              <div
+              <ReviewCard
                 key={r._id}
-                className="group relative rounded-2xl border border-gray-200 bg-white p-5 transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <Stars value={r.customerRating} />
-                  <button
-                    type="button"
-                    onClick={() => setPendingDelete(r)}
-                    aria-label="Delete review"
-                    title="Delete review"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 opacity-0 transition hover:bg-error-50 hover:text-error-500 group-hover:opacity-100 dark:hover:bg-error-500/10"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-
-                {r.customerFeedback ? (
-                  <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                    “{r.customerFeedback}”
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm italic text-gray-400 dark:text-gray-500">
-                    No written feedback.
-                  </p>
-                )}
-
-                <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
-                  <div>
-                    <dt className="text-gray-400 dark:text-gray-500">Customer</dt>
-                    <dd
-                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
-                      title={r.customer}
-                    >
-                      {shortId(r.customer)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-400 dark:text-gray-500">Driver</dt>
-                    <dd
-                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
-                      title={r.driver}
-                    >
-                      {shortId(r.driver)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-400 dark:text-gray-500">Ride</dt>
-                    <dd
-                      className="mt-0.5 truncate font-mono text-gray-600 dark:text-gray-300"
-                      title={r.ride}
-                    >
-                      {shortId(r.ride)}
-                    </dd>
-                  </div>
-                </dl>
-
-                {r.createdAt && (
-                  <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">
-                    {formatDateTime(r.createdAt)}
-                  </p>
-                )}
-              </div>
+                review={r}
+                onDelete={setPendingDelete}
+              />
             ))}
           </div>
 
@@ -295,7 +283,7 @@ export default function ReviewsPage() {
         title="Delete this review?"
         description={
           pendingDelete
-            ? `Review ${pendingDelete._id} will be permanently removed. This cannot be undone.`
+            ? "This review will be permanently removed. This cannot be undone."
             : ""
         }
         isLoading={deleteMutation.isPending}
@@ -303,5 +291,103 @@ export default function ReviewsPage() {
         onClose={() => setPendingDelete(null)}
       />
     </>
+  );
+}
+
+function PersonInline({
+  label,
+  person,
+}: {
+  label: string;
+  person: Review["customer"] | Review["driver"];
+}) {
+  const image = personImage(person);
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <img
+        src={image || FALLBACK_AVATAR}
+        alt=""
+        onError={(e) => {
+          (e.currentTarget as HTMLImageElement).src = FALLBACK_AVATAR;
+        }}
+        className="size-7 shrink-0 rounded-full bg-gray-100 object-cover dark:bg-gray-800"
+      />
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          {label}
+        </p>
+        <p className="truncate text-xs font-medium capitalize text-gray-800 dark:text-white/90">
+          {personName(person)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ReviewCard({
+  review: r,
+  onDelete,
+}: {
+  review: Review;
+  onDelete: (r: Review) => void;
+}) {
+  const ride = rideObj(r.ride);
+  return (
+    <div className="group relative rounded-2xl border border-gray-200 bg-white p-5 transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700">
+      <div className="flex items-start justify-between gap-3">
+        <Stars value={r.customerRating} />
+        <button
+          type="button"
+          onClick={() => onDelete(r)}
+          aria-label="Delete review"
+          title="Delete review"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 opacity-0 transition hover:bg-error-50 hover:text-error-500 group-hover:opacity-100 dark:hover:bg-error-500/10"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+
+      {r.customerFeedback ? (
+        <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
+          “{r.customerFeedback}”
+        </p>
+      ) : (
+        <p className="mt-3 text-sm italic text-gray-400 dark:text-gray-500">
+          No written feedback.
+        </p>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-3 sm:grid-cols-2 dark:border-gray-800">
+        <PersonInline label="Customer" person={r.customer} />
+        <PersonInline label="Driver" person={r.driver} />
+      </div>
+
+      {ride && (
+        <dl className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
+          {ride.region && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {ride.region}
+            </span>
+          )}
+          {ride.status && (
+            <span className="capitalize">Ride: {ride.status}</span>
+          )}
+          {ride.fare !== undefined && (
+            <span className="tabular-nums">
+              {ride.currency ?? ""} {ride.fare}
+            </span>
+          )}
+          {ride.completedAt && (
+            <span>Completed {formatDateTime(ride.completedAt)}</span>
+          )}
+        </dl>
+      )}
+
+      {r.createdAt && (
+        <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">
+          Reviewed {formatDateTime(r.createdAt)}
+        </p>
+      )}
+    </div>
   );
 }

@@ -138,7 +138,7 @@ export default function Home() {
   const recentRidesQ = useRidesQuery({
     page: 1,
     limit: 8,
-    ...(region === "all" ? {} : { countryCode: region }),
+    ...(region === "all" ? {} : { region }),
   });
   const driversQ = useDriversQuery({ page: 1, limit: 50 });
   const lowReviewsQ = useReviewsQuery({ page: 1, limit: 5, maxRating: 3 });
@@ -174,7 +174,22 @@ export default function Home() {
         createdAt: r.createdAt,
       }));
     }
-    return recentRidesQ.data?.rides ?? [];
+    // Normalize the /admin/rides/ fallback to the same display shape so the
+    // table below can iterate without per-row type branches.
+    return (recentRidesQ.data?.rides ?? []).map((r) => {
+      const user = typeof r.userId === "object" ? r.userId : null;
+      const driver = typeof r.driverId === "object" ? r.driverId : null;
+      return {
+        _id: r._id,
+        userName: user?.fullName || user?.username || undefined,
+        driverName: driver?.fullName || driver?.username || undefined,
+        countryCode: r.region,
+        fare: r.estimatedFare,
+        currency: r.currency,
+        status: r.status,
+        createdAt: r.createdAt,
+      };
+    });
   }, [latestRidesQ.data, recentRidesQ.data, region]);
   const lowReviews =
     reviewsAttentionQ.data ?? lowReviewsQ.data?.reviews ?? [];
@@ -215,7 +230,7 @@ export default function Home() {
     () =>
       region === "all"
         ? allActiveRides
-        : allActiveRides.filter((r) => r.countryCode === region),
+        : allActiveRides.filter((r) => r.region === region),
     [allActiveRides, region],
   );
 
@@ -319,7 +334,7 @@ export default function Home() {
                 }
                 activeRidesNow={
                   server?.activeRidesNow ??
-                  allActiveRides.filter((rd) => rd.countryCode === r.code).length
+                  allActiveRides.filter((rd) => rd.region === r.code).length
                 }
                 pendingApprovals={server?.pendingApprovals ?? localPending}
                 onSelect={() => setRegion(r.code)}
@@ -1163,8 +1178,9 @@ function LowRatedReviewsCard({
     _id: string;
     customerRating: number;
     customerFeedback?: string;
-    customer?: string;
-    driver?: string;
+    // Either a populated user object or just an id, depending on the source.
+    customer?: { _id: string; fullName?: string; username?: string } | string;
+    driver?: { _id: string; fullName?: string; username?: string } | string;
     createdAt?: string;
   }>;
   loading?: boolean;
@@ -1199,7 +1215,14 @@ function LowRatedReviewsCard({
             <li key={r._id} className="py-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-mono text-gray-500 dark:text-gray-400">
-                  Driver {r.driver ? `${r.driver.slice(0, 6)}…` : "—"}
+                  Driver{" "}
+                  {!r.driver
+                    ? "—"
+                    : typeof r.driver === "string"
+                      ? `${r.driver.slice(0, 6)}…`
+                      : r.driver.fullName ||
+                        r.driver.username ||
+                        `${r.driver._id.slice(0, 6)}…`}
                 </p>
                 <span className="inline-flex items-center gap-0.5 text-xs">
                   {Array.from({ length: 5 }).map((_, i) => (

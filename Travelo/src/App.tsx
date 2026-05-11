@@ -27,10 +27,12 @@
   import UserProfiles from "./pages/Community/UserProfile";
   import UserRideHistoryPage from "./pages/UserRideHistoryPage";
   import FareManagement from "./pages/FareManagement/FareManagementPage";
-  import RoleManagementPage from "./pages/RoleManagement/RoleManagementPage";
-  import CreateRolePage from "./pages/RoleManagement/CreateRolePage";
-  import AdminProfiles from "./pages/RoleManagement/AdminProfilePage";
-  import EditRolePage from "./pages/RoleManagement/EditRolePage";
+  // Role Management is hidden — re-enable by uncommenting these imports and
+  // the routes below.
+  // import RoleManagementPage from "./pages/RoleManagement/RoleManagementPage";
+  // import CreateRolePage from "./pages/RoleManagement/CreateRolePage";
+  // import AdminProfiles from "./pages/RoleManagement/AdminProfilePage";
+  // import EditRolePage from "./pages/RoleManagement/EditRolePage";
   import RideTypesPage from "./pages/RideTypes/RideTypesPage";
   import RidesPage from "./pages/Rides/RidesPage";
   import DriverApprovalsPage from "./pages/DriverApprovals/DriverApprovalsPage";
@@ -101,11 +103,13 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
               {/* Help and Support */}
               <Route path="help-support" element={<HelpAndSupport />} />
 
-              {/* Role Management */}
+              {/* Role Management — hidden. Uncomment to restore. */}
+              {/*
               <Route path="role-management" element={<RoleManagementPage />} />
               <Route path="create-role-page" element={<CreateRolePage />} />
               <Route path="edit-role-page/:id" element={<EditRolePage />} />
               <Route path="AdminProfile/:id" element={<AdminProfiles />} />
+              */}
 
 
               {/* Ui Elements */}

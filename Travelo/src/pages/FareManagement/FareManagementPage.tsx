@@ -133,7 +133,7 @@ export default function FareManagementPage() {
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
-        toast.error("Delete isn't available yet — backend endpoint not implemented.");
+        toast.error("That pricing was already removed.");
       } else {
         toast.error(getErrorMessage(err));
       }

@@ -2,41 +2,72 @@ import { useMemo, useState } from "react";
 import { Download, Eye, FileText, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import Button from "../ui/button/Button";
-import type { Driver } from "../../types/driver";
+import type {
+  Driver,
+  DriverDocumentCategoryRaw,
+  DriverDocumentFile,
+} from "../../types/driver";
 
 interface Props {
   driver: Driver;
 }
 
-interface DocumentItem {
-  /** Stable key for selection state */
+// Human-readable labels for the categories the backend returns. Any category
+// not in this map falls back to a humanized version of the backend key.
+const CATEGORY_LABELS: Record<string, string> = {
+  idCard: "ID card",
+  drivingLicense: "Driving license",
+  VehicleRegisterationCertificate: "Vehicle registration certificate",
+};
+
+const labelFor = (key: string) =>
+  CATEGORY_LABELS[key] ??
+  key
+    // CamelCase → spaced
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
+
+interface NormalisedDoc {
+  /** Stable selection key — e.g. "idCard-0" so multiple files in a category stay independent */
   key: string;
-  /** Display name */
+  /** Category key the backend used (e.g. "idCard") */
+  categoryKey: string;
+  /** Friendly category label */
   label: string;
-  /** Direct URL to the file (image or PDF) */
-  url?: string | null;
+  /** File index within its category, when there are multiple */
+  index?: number;
+  url: string;
+  status?: string;
+  expiryDate?: string | null;
 }
 
-/**
- * Document field names the backend may return on a driver. As the backend adds
- * more fields, just add the key + label here — the UI will render them automatically.
- *
- * The Driver type is currently strict, so we read these via `(driver as any)[key]`
- * — that's intentional until the backend confirms the final field names.
- */
-const DOC_FIELDS: { key: string; label: string }[] = [
-  { key: "image", label: "Profile photo" },
-  { key: "drivingLicense", label: "Driving license" },
-  { key: "drivingLicenseFront", label: "Driving license (front)" },
-  { key: "drivingLicenseBack", label: "Driving license (back)" },
-  { key: "idCardFront", label: "ID card (front)" },
-  { key: "idCardBack", label: "ID card (back)" },
-  { key: "vehicleRegistration", label: "Vehicle registration" },
-  { key: "insurance", label: "Insurance" },
-  { key: "policeVerification", label: "Police verification" },
-];
+// Flatten the three possible category shapes into a single DocFile[].
+function readCategory(raw: DriverDocumentCategoryRaw | undefined): {
+  files: DriverDocumentFile[];
+  categoryExpiry?: string | null;
+} {
+  if (!raw) return { files: [] };
 
-const isImage = (url: string) => /\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url);
+  // Variant 2: array of files directly.
+  if (Array.isArray(raw)) return { files: raw };
+
+  // Variant 1: { expiryDate, files }
+  if ("files" in raw && Array.isArray((raw as { files?: unknown }).files)) {
+    const v = raw as { expiryDate?: string | null; files: DriverDocumentFile[] };
+    return { files: v.files, categoryExpiry: v.expiryDate ?? undefined };
+  }
+
+  // Variant 3: single file as a flat object.
+  const v = raw as DriverDocumentFile & { type?: string };
+  if (v.url) return { files: [v] };
+
+  return { files: [] };
+}
+
+const isImage = (url: string) =>
+  /\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url);
+
 const fileNameFromUrl = (url: string) => {
   try {
     const u = new URL(url);
@@ -60,61 +91,79 @@ async function downloadFile(url: string, fallbackName: string) {
     a.remove();
     URL.revokeObjectURL(objectUrl);
   } catch (err) {
-    // Fallback: open the URL in a new tab so the user can save manually.
-    // (Common when the file's CORS doesn't allow blob fetch.)
+    // Fallback when CORS blocks the blob fetch: open in a new tab.
     console.warn("[downloadFile] blob fetch failed, opening in tab:", err);
     window.open(url, "_blank", "noopener,noreferrer");
   }
 }
 
-export default function DriverDocumentsSection({ driver }: Props) {
-  const documents = useMemo<DocumentItem[]>(() => {
-    return DOC_FIELDS.map(({ key, label }) => {
-      const url = (driver as unknown as Record<string, unknown>)[key];
-      return {
-        key,
-        label,
-        url: typeof url === "string" && url.length > 0 ? url : null,
-      };
-    });
-  }, [driver]);
+const statusTone = (status?: string): string => {
+  switch ((status || "").toLowerCase()) {
+    case "approved":
+      return "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400";
+    case "rejected":
+      return "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400";
+    case "pending":
+      return "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400";
+    default:
+      return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300";
+  }
+};
 
-  const uploaded = documents.filter((d) => d.url);
-  const missing = documents.filter((d) => !d.url);
+export default function DriverDocumentsSection({ driver }: Props) {
+  const documents = useMemo<NormalisedDoc[]>(() => {
+    const raw = driver.driverDocuments?.documents;
+    if (!raw) return [];
+
+    const out: NormalisedDoc[] = [];
+    Object.entries(raw).forEach(([categoryKey, value]) => {
+      const { files, categoryExpiry } = readCategory(value);
+      files.forEach((f, idx) => {
+        out.push({
+          key: `${categoryKey}-${idx}`,
+          categoryKey,
+          label: labelFor(categoryKey),
+          index: files.length > 1 ? idx + 1 : undefined,
+          url: f.url,
+          status: f.status,
+          // Per-file expiryDate wins; otherwise inherit the category-level one.
+          expiryDate: f.expiryDate ?? categoryExpiry ?? null,
+        });
+      });
+    });
+    return out;
+  }, [driver]);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const allSelected =
-    uploaded.length > 0 && selected.size === uploaded.length;
+    documents.length > 0 && selected.size === documents.length;
 
-  const toggleOne = (key: string) => {
+  const toggleOne = (key: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
 
-  const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(uploaded.map((d) => d.key)));
-  };
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(documents.map((d) => d.key)));
 
-  const downloadOne = (doc: DocumentItem) => {
-    if (!doc.url) return;
+  const downloadOne = (doc: NormalisedDoc) =>
     downloadFile(doc.url, fileNameFromUrl(doc.url));
-  };
 
   const downloadSelected = async () => {
-    const items = uploaded.filter((d) => selected.has(d.key));
+    const items = documents.filter((d) => selected.has(d.key));
     if (items.length === 0) {
       toast.error("Select at least one document");
       return;
     }
-    toast.message(`Downloading ${items.length} file${items.length === 1 ? "" : "s"}…`);
+    toast.message(
+      `Downloading ${items.length} file${items.length === 1 ? "" : "s"}…`,
+    );
     for (const item of items) {
-      if (!item.url) continue;
       // Stagger so browsers don't block multi-download.
       await new Promise((r) => setTimeout(r, 150));
       await downloadFile(item.url, fileNameFromUrl(item.url));
@@ -129,12 +178,14 @@ export default function DriverDocumentsSection({ driver }: Props) {
             Documents
           </h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {uploaded.length} uploaded · {missing.length} missing
-            {driver.isDocumentUploaded ? "" : " · Driver hasn't completed uploads"}
+            {documents.length} file{documents.length === 1 ? "" : "s"}
+            {driver.isDocumentUploaded
+              ? ""
+              : " · Driver hasn't completed uploads"}
           </p>
         </div>
 
-        {uploaded.length > 0 && (
+        {documents.length > 0 && (
           <div className="flex items-center gap-3">
             <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
               <input
@@ -158,16 +209,14 @@ export default function DriverDocumentsSection({ driver }: Props) {
         )}
       </div>
 
-      {/* Uploaded docs */}
-      {uploaded.length === 0 ? (
+      {documents.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
           No documents uploaded yet.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {uploaded.map((doc) => {
-            const url = doc.url!;
-            const image = isImage(url);
+          {documents.map((doc) => {
+            const image = isImage(doc.url);
             const checked = selected.has(doc.key);
             return (
               <div
@@ -181,13 +230,13 @@ export default function DriverDocumentsSection({ driver }: Props) {
                 {/* Preview */}
                 <button
                   type="button"
-                  onClick={() => setPreviewUrl(url)}
+                  onClick={() => setPreviewUrl(doc.url)}
                   className="relative flex h-28 items-center justify-center bg-gray-50 dark:bg-white/[0.02]"
                   aria-label={`Preview ${doc.label}`}
                 >
                   {image ? (
                     <img
-                      src={url}
+                      src={doc.url}
                       alt={doc.label}
                       className="h-full w-full object-cover transition group-hover:scale-[1.02]"
                     />
@@ -201,6 +250,13 @@ export default function DriverDocumentsSection({ driver }: Props) {
                       <FileText className="size-3.5 text-gray-600 dark:text-gray-300" />
                     )}
                   </span>
+                  {doc.status && (
+                    <span
+                      className={`absolute left-2 top-2 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${statusTone(doc.status)}`}
+                    >
+                      {doc.status}
+                    </span>
+                  )}
                 </button>
 
                 {/* Footer */}
@@ -212,14 +268,27 @@ export default function DriverDocumentsSection({ driver }: Props) {
                       onChange={() => toggleOne(doc.key)}
                       className="size-3.5 shrink-0 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
                     />
-                    <span className="truncate text-xs font-medium text-gray-800 dark:text-white/90">
-                      {doc.label}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-gray-800 dark:text-white/90">
+                        {doc.label}
+                        {doc.index !== undefined && (
+                          <span className="ml-1 text-[10px] font-normal text-gray-400">
+                            #{doc.index}
+                          </span>
+                        )}
+                      </span>
+                      {doc.expiryDate && (
+                        <span className="block truncate text-[10px] text-gray-400">
+                          Expires{" "}
+                          {new Date(doc.expiryDate).toLocaleDateString()}
+                        </span>
+                      )}
                     </span>
                   </label>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setPreviewUrl(url)}
+                      onClick={() => setPreviewUrl(doc.url)}
                       className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-300"
                       title="View"
                     >
@@ -238,26 +307,6 @@ export default function DriverDocumentsSection({ driver }: Props) {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Missing docs */}
-      {missing.length > 0 && (
-        <div className="mt-5">
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Not uploaded
-          </h4>
-          <div className="flex flex-wrap gap-1.5">
-            {missing.map((doc) => (
-              <span
-                key={doc.key}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-              >
-                <FileText className="size-3" />
-                {doc.label}
-              </span>
-            ))}
-          </div>
         </div>
       )}
 
@@ -306,7 +355,7 @@ export default function DriverDocumentsSection({ driver }: Props) {
                 <iframe
                   src={previewUrl}
                   title="Document preview"
-                  className="h-[80vh] w-[90vw] max-w-5xl"
+                  className="h-[70vh] w-full max-w-5xl sm:h-[80vh] sm:w-[90vw]"
                 />
               )}
             </div>

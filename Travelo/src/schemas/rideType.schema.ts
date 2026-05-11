@@ -20,7 +20,10 @@ export const rideTypeFormSchema = z.object({
     .array(z.string().min(1))
     .min(1, "Select at least one region"),
   isActive: z.boolean(),
-  icon: z.string().trim().optional().or(z.literal("")),
+  // Empty string means "use the default icon"; otherwise it must be a valid URL.
+  icon: z
+    .union([z.literal(""), z.string().trim().url("Enter a valid icon URL")])
+    .optional(),
 });
 
 export type RideTypeFormInput = z.infer<typeof rideTypeFormSchema>;
