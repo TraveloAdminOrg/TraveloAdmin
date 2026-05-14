@@ -97,6 +97,10 @@ export const ENDPOINTS = {
     base: "/faq/",
     byId: (id: string) => `/faq/${id}`,
   },
+  commissions: {
+    base: "/commission/",
+    byId: (id: string) => `/commission/${id}`,
+  },
   dashboard: {
     kpis: "/adminDashboard/",
     revenueTrend: "/adminDashboard/revenue-trend",

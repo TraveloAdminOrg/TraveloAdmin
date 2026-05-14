@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import {
   Wallet,
+  Percent,
   Car,
   Users,
   User as UserIcon,
@@ -87,6 +88,11 @@ const NAV_GROUPS: NavGroup[] = [
         name: "Fare Management",
         icon: <Wallet size={20} />,
         path: "/fare-management",
+      },
+      {
+        name: "Commission",
+        icon: <Percent size={20} />,
+        path: "/commission",
       },
       { name: "Ride Types", icon: <Car size={20} />, path: "/ride-types" },
     ],

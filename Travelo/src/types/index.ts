@@ -2,6 +2,7 @@ export * from "./admin";
 export * from "./advert";
 export * from "./api";
 export * from "./auth";
+export * from "./commission";
 export * from "./driver";
 export * from "./faq";
 export * from "./notification";
