@@ -14,6 +14,11 @@ export const weeklyFareEntrySchema = z.object({
   minimumFare: moneyField("Minimum fare"),
   cancellationFee: moneyField("Cancellation fee"),
   cleaningCharge: moneyField("Cleaning charge"),
+  waitingCharge: moneyField("Waiting charge"),
+  // Backend stores surge as a plain number (e.g. 1.5 = 50% surge, or 30 if
+  // they encode it as a percentage). Bounded the same way as money fields
+  // so the form can't submit something absurd.
+  surgeMultiplier: moneyField("Surge multiplier"),
 });
 
 export const pricingRideTypeSchema = z.object({

@@ -30,6 +30,18 @@ const refTitle = (
   return r.title;
 };
 
+// Fields that contribute to "is the week uniform" comparison.
+const COMPARABLE_FIELDS: (keyof Omit<WeeklyFareEntry, "dayOfWeek">)[] = [
+  "baseFare",
+  "pricePerKm",
+  "pricePerMinute",
+  "minimumFare",
+  "cancellationFee",
+  "cleaningCharge",
+  "waitingCharge",
+  "surgeMultiplier",
+];
+
 // Returns null if all 7 days share identical fare values (so we can collapse
 // the row to a single line); otherwise returns the seven entries sorted.
 const collapseUniform = (
@@ -38,14 +50,8 @@ const collapseUniform = (
   if (week.length !== 7) return null;
   const sorted = [...week].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
   const [first] = sorted;
-  const uniform = sorted.every(
-    (d) =>
-      d.baseFare === first.baseFare &&
-      d.pricePerKm === first.pricePerKm &&
-      d.pricePerMinute === first.pricePerMinute &&
-      d.minimumFare === first.minimumFare &&
-      d.cancellationFee === first.cancellationFee &&
-      d.cleaningCharge === first.cleaningCharge,
+  const uniform = sorted.every((d) =>
+    COMPARABLE_FIELDS.every((k) => d[k] === first[k]),
   );
   return uniform ? first : null;
 };
@@ -87,6 +93,12 @@ export default function PricingCard({
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
               {pricing.currency}
             </span>
+            {pricing.rideTypes.length > 0 && (
+              <span className="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-medium text-success-700 dark:bg-success-500/10 dark:text-success-400">
+                {pricing.rideTypes.length} ride type
+                {pricing.rideTypes.length === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
           {pricing.updatedAt && (
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -128,13 +140,15 @@ export default function PricingCard({
               <th className="px-4 py-2 text-right font-medium">Min fare</th>
               <th className="px-4 py-2 text-right font-medium">Cancel</th>
               <th className="px-4 py-2 text-right font-medium">Cleaning</th>
+              <th className="px-4 py-2 text-right font-medium">Waiting</th>
+              <th className="px-4 py-2 text-right font-medium">Surge</th>
             </tr>
           </thead>
           <tbody>
             {pricing.rideTypes.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={10}
                   className="px-4 py-6 text-center text-gray-500 dark:text-gray-400"
                 >
                   No ride types configured.
@@ -204,7 +218,7 @@ export default function PricingCard({
                         </button>
                       </td>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400"
                       >
                         {/* Range hint so admins see the spread without expanding */}
@@ -213,18 +227,32 @@ export default function PricingCard({
                       </td>
                     </tr>
                     {isOpen &&
-                      week.map((d) => (
-                        <tr
-                          key={`${id}-${idx}-${d.dayOfWeek}`}
-                          className="border-t border-dashed border-gray-100 bg-gray-50/40 dark:border-gray-800 dark:bg-white/[0.02]"
-                        >
-                          <td />
-                          <td className="px-4 py-2 text-gray-600 dark:text-gray-300">
-                            {DAY_LABELS[d.dayOfWeek]}
-                          </td>
-                          <FareCells row={d} currency={pricing.currency} />
-                        </tr>
-                      ))}
+                      week.map((d) => {
+                        // Sun (0) and Sat (6) get a slight tint so weekends
+                        // are easy to spot when scanning the breakdown.
+                        const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
+                        return (
+                          <tr
+                            key={`${id}-${idx}-${d.dayOfWeek}`}
+                            className={`border-t border-dashed border-gray-100 dark:border-gray-800 ${
+                              isWeekend
+                                ? "bg-warning-50/40 dark:bg-warning-500/[0.04]"
+                                : "bg-gray-50/40 dark:bg-white/[0.02]"
+                            }`}
+                          >
+                            <td />
+                            <td className="px-4 py-2 text-gray-600 dark:text-gray-300">
+                              {DAY_LABELS[d.dayOfWeek]}
+                              {isWeekend && (
+                                <span className="ml-1 text-[9px] uppercase tracking-wide text-warning-600 dark:text-warning-400">
+                                  wknd
+                                </span>
+                              )}
+                            </td>
+                            <FareCells row={d} currency={pricing.currency} />
+                          </tr>
+                        );
+                      })}
                   </Fragment>
                 );
               })
@@ -262,6 +290,13 @@ function FareCells({
       </td>
       <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
         {currency} {row.cleaningCharge}
+      </td>
+      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
+        {currency} {row.waitingCharge}
+      </td>
+      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
+        {row.surgeMultiplier}
+        <span className="ml-0.5 text-[10px] text-gray-400">×</span>
       </td>
     </>
   );

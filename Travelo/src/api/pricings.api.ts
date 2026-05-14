@@ -50,6 +50,6 @@ export const pricingsApi = {
 
   remove: (id: string) =>
     apiClient
-      .delete<ApiResponse<null>>(ENDPOINTS.pricings.byId(id))
-      .then((r) => r.data),
+      .delete<ApiResponse<{ id: string }>>(ENDPOINTS.pricings.byId(id))
+      .then((r) => r.data.data.id),
 };
