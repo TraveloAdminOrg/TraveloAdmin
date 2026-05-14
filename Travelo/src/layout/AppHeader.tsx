@@ -24,6 +24,7 @@ const NAV_TARGETS: NavTarget[] = [
   { path: "/adverts", label: "Adverts", keywords: ["ads"] },
   { path: "/reports", label: "Reports", keywords: ["analytics"] },
   { path: "/fare-management", label: "Fare Management", keywords: ["pricing"] },
+  { path: "/commission", label: "Commission", keywords: ["fees", "platform"] },
   { path: "/ride-types", label: "Ride Types", keywords: ["vehicles"] },
   { path: "/content-management", label: "Content Management" },
   { path: "/help-support", label: "Help & Support" },
