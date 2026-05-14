@@ -49,6 +49,8 @@ const FARE_FIELDS = [
   { key: "minimumFare", label: "Min fare" },
   { key: "cancellationFee", label: "Cancel fee" },
   { key: "cleaningCharge", label: "Cleaning" },
+  { key: "waitingCharge", label: "Waiting" },
+  { key: "surgeMultiplier", label: "Surge" },
 ] as const satisfies readonly {
   key: keyof Omit<WeeklyFareEntry, "dayOfWeek">;
   label: string;
@@ -62,6 +64,8 @@ const blankDay = (dayOfWeek: number): WeeklyFareEntry => ({
   minimumFare: 0,
   cancellationFee: 0,
   cleaningCharge: 0,
+  waitingCharge: 0,
+  surgeMultiplier: 0,
 });
 
 const blankWeek = (): WeeklyFareEntry[] => DAYS.map((d) => blankDay(d.value));
@@ -234,6 +238,11 @@ export default function PricingFormModal({
 
       const payload = {
         region: values.region,
+        // Echo the selected region's currency back so the update path matches
+        // the backend's expected shape; create accepts it as a no-op.
+        ...(selectedRegion?.currency
+          ? { currency: selectedRegion.currency }
+          : {}),
         rideTypes,
       };
 
@@ -442,7 +451,7 @@ export default function PricingFormModal({
                     </div>
 
                     {uniform ? (
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
                         {FARE_FIELDS.map((f) => (
                           <NumberField
                             key={f.key}

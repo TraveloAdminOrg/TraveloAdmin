@@ -8,6 +8,10 @@ export interface WeeklyFareEntry {
   minimumFare: number;
   cancellationFee: number;
   cleaningCharge: number;
+  // Charges applied while the driver waits for the rider (per minute) and the
+  // surge factor applied to the fare during peak demand.
+  waitingCharge: number;
+  surgeMultiplier: number;
 }
 
 // Populated region object as returned by GET /fare/.
@@ -58,6 +62,9 @@ export interface FareRideTypeInput {
 
 export type PricingCreateInput = {
   region: string; // region _id
+  // Optional on create (backend derives from region) but accepted on update —
+  // included here so the form can echo the resolved value back to the server.
+  currency?: string;
   rideTypes: FareRideTypeInput[];
 };
 
