@@ -28,6 +28,7 @@
   import UserRideHistoryPage from "./pages/UserRideHistoryPage";
   import FareManagement from "./pages/FareManagement/FareManagementPage";
   import CommissionPage from "./pages/Commission/CommissionPage";
+  import RegionPage from "./pages/Region/RegionPage";
   // Role Management is hidden — re-enable by uncommenting these imports and
   // the routes below.
   // import RoleManagementPage from "./pages/RoleManagement/RoleManagementPage";
@@ -88,6 +89,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
               <Route path="fare-management" element={<FareManagement />} />
               {/* Commission */}
               <Route path="commission" element={<CommissionPage />} />
+              {/* Regions */}
+              <Route path="regions" element={<RegionPage />} />
 
               {/* Ride Types (Vehicle Categories) */}
               <Route path="ride-types" element={<RideTypesPage />} />
