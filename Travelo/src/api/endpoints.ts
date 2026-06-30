@@ -87,9 +87,9 @@ export const ENDPOINTS = {
     list: "/fare/",
     byId: (id: string) => `/fare/${id}`,
   },
-  // TODO: confirm path with backend — assumed `/region/` to match the `/fare/` convention.
   regions: {
-    base: "/region",
+    base: "/region/",
+    all: "/region/all",
     list: "/region/",
     byId: (id: string) => `/region/${id}`,
   },

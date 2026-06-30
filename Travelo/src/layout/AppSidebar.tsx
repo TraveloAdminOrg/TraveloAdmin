@@ -15,6 +15,7 @@ import {
   BarChart3,
   LayoutDashboard,
   FileText,
+  Globe,
   HelpCircle,
   // UserCog, // used by the hidden Role Management nav entry below
   ChevronRight,
@@ -108,6 +109,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Configuration",
     items: [
+      { name: "Regions", icon: <Globe size={20} />, path: "/regions" },
       {
         name: "Content Management",
         icon: <FileText size={20} />,
