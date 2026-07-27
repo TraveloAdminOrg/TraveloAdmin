@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  type Resolver,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Copy, Plus, Trash2 } from "lucide-react";
@@ -7,122 +12,103 @@ import { Modal } from "../ui/modal";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Button from "../ui/button/Button";
-import LoadingSpinner from "../common/LoadingSpinner";
 import {
   pricingFormSchema,
   type PricingFormInput,
 } from "../../schemas/pricing.schema";
 import { getErrorMessage } from "../../lib/error";
+import { refId, regionRefId } from "../../lib/refs";
+import {
+  DAYS,
+  FARE_FIELDS,
+  blankWeek,
+  isUniformWeek,
+  normaliseWeek,
+  spreadAcrossWeek,
+  type FareField,
+  type FareFieldKey,
+} from "../../lib/pricing";
 import {
   useCreatePricing,
   useUpdatePricing,
 } from "../../hooks/queries/usePricings";
 import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
 import { useRegionsQuery } from "../../hooks/queries/useRegions";
-import type {
-  Pricing,
-  PricingRideType,
-  WeeklyFareEntry,
-} from "../../types/pricing";
+import type { Pricing, PricingCreateInput } from "../../types/pricing";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   pricing?: Pricing | null; // edit mode if provided
   defaultRegionId?: string; // pre-selects this region in create mode (region _id)
+  // Regions that already have a fare. The backend permits one fare document per
+  // region, so these can't be created again — they have to be edited.
+  pricedRegionIds?: Set<string>;
 }
 
-const DAYS: { value: number; short: string; long: string }[] = [
-  { value: 0, short: "Sun", long: "Sunday" },
-  { value: 1, short: "Mon", long: "Monday" },
-  { value: 2, short: "Tue", long: "Tuesday" },
-  { value: 3, short: "Wed", long: "Wednesday" },
-  { value: 4, short: "Thu", long: "Thursday" },
-  { value: 5, short: "Fri", long: "Friday" },
-  { value: 6, short: "Sat", long: "Saturday" },
-];
-
-const FARE_FIELDS = [
-  { key: "baseFare", label: "Base" },
-  { key: "pricePerKm", label: "Per km" },
-  { key: "pricePerMinute", label: "Per min" },
-  { key: "minimumFare", label: "Min fare" },
-  { key: "cancellationFee", label: "Cancel fee" },
-  { key: "cleaningCharge", label: "Cleaning" },
-  { key: "waitingCharge", label: "Waiting" },
-  { key: "surgeMultiplier", label: "Surge" },
-] as const satisfies readonly {
-  key: keyof Omit<WeeklyFareEntry, "dayOfWeek">;
-  label: string;
-}[];
-
-const blankDay = (dayOfWeek: number): WeeklyFareEntry => ({
-  dayOfWeek,
-  baseFare: 0,
-  pricePerKm: 0,
-  pricePerMinute: 0,
-  minimumFare: 0,
-  cancellationFee: 0,
-  cleaningCharge: 0,
-  waitingCharge: 0,
-  surgeMultiplier: 0,
-});
-
-const blankWeek = (): WeeklyFareEntry[] => DAYS.map((d) => blankDay(d.value));
-
-const blankRow = () => ({
-  rideType: "",
-  weeklyFare: blankWeek(),
-});
+const blankRow = () => ({ rideType: "", weeklyFare: blankWeek() });
 
 const emptyDefaults = (defaultRegionId?: string): PricingFormInput => ({
   region: defaultRegionId ?? "",
   rideTypes: [blankRow()],
 });
 
-// Returns true when every day's fares match day 0 — used to default the
-// "same for all days" toggle when editing existing data.
-const isUniformWeek = (week: WeeklyFareEntry[]): boolean => {
-  if (week.length !== 7) return false;
-  const [first] = week;
-  return week.every((d) =>
-    FARE_FIELDS.every((f) => d[f.key] === first[f.key]),
-  );
-};
-
-// Read the populated rideType _id whether the API returned an object, a
-// string, or null (orphaned reference after the ride type was deleted).
-const refId = (r: PricingRideType["rideType"] | null | undefined): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-// Read the region id whether the API returned an object or a string.
-const regionRefId = (r: Pricing["region"] | null | undefined): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-// Ensure 7 entries ordered Sun→Sat, filling any missing day with zeros.
-const normaliseWeek = (week: WeeklyFareEntry[]): WeeklyFareEntry[] => {
-  const byDay = new Map(week.map((d) => [d.dayOfWeek, d]));
-  return DAYS.map((d) => byDay.get(d.value) ?? blankDay(d.value));
-};
+const baseResolver = zodResolver(pricingFormSchema);
 
 export default function PricingFormModal({
   isOpen,
   onClose,
   pricing,
   defaultRegionId,
+  pricedRegionIds,
 }: Props) {
   const isEdit = Boolean(pricing);
 
   // Pull all ride types so we can populate the per-row dropdown.
   // Fetch a generous page size so we don't have to paginate inside the form.
   const { data: rideTypesData } = useRideTypesQuery({ page: 1, limit: 100 });
-  const allRideTypes = rideTypesData?.rideTypes ?? [];
+  const allRideTypes = useMemo(
+    () => rideTypesData?.rideTypes ?? [],
+    [rideTypesData],
+  );
 
   const { data: regions = [], isLoading: regionsLoading } = useRegionsQuery();
+
+  // Per-row UI state: one fare set applied to every day, or expanded per-day
+  // rows. Keyed by the field-array's stable id. A row is uniform unless it has
+  // been explicitly toggled off — `?? true` is the single source of that default.
+  const [sameForAll, setSameForAll] = useState<Record<string, boolean>>({});
+
+  // The resolver runs outside of render, so it reads these refs rather than
+  // closing over state (which would also make it depend on `fields`, and
+  // `fields` doesn't exist until after useForm).
+  const sameForAllRef = useRef<Record<string, boolean>>({});
+  const fieldIdsRef = useRef<string[]>([]);
+
+  const rowIsUniform = useCallback((rowIndex: number): boolean => {
+    const id = fieldIdsRef.current[rowIndex];
+    return id ? (sameForAllRef.current[id] ?? true) : true;
+  }, []);
+
+  // Mirror day 0 across the week for uniform rows BEFORE validating. In uniform
+  // mode only day 0 is rendered, so validating the raw values would let a stale
+  // value on a hidden day (1–6) block submit with an error nobody can see or
+  // fix. RHF hands the resolver's output to onSubmit, so this is also what gets
+  // sent to the backend.
+  const resolver = useCallback<Resolver<PricingFormInput>>(
+    (values, context, options) => {
+      const normalised: PricingFormInput = {
+        ...values,
+        rideTypes: (values.rideTypes ?? []).map((row, idx) => {
+          if (!rowIsUniform(idx)) return row;
+          const [first] = normaliseWeek(row.weeklyFare);
+          return { ...row, weeklyFare: spreadAcrossWeek(first) };
+        }),
+      };
+      return baseResolver(normalised, context, options);
+    },
+    [rowIsUniform],
+  );
 
   const {
     control,
@@ -133,7 +119,7 @@ export default function PricingFormModal({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<PricingFormInput>({
-    resolver: zodResolver(pricingFormSchema),
+    resolver,
     mode: "onTouched",
     defaultValues: emptyDefaults(defaultRegionId),
   });
@@ -143,47 +129,52 @@ export default function PricingFormModal({
     name: "rideTypes",
   });
 
+  // Keep the refs the resolver reads in step with render state.
+  useEffect(() => {
+    sameForAllRef.current = sameForAll;
+    fieldIdsRef.current = fields.map((f) => f.id);
+  }, [sameForAll, fields]);
+
   const watchedRegionId = watch("region");
 
-  // Selected region object — used to display read-only currency and to
-  // filter ride types by their `allowedRegions` (which is a list of region _ids).
+  // Selected region — drives the read-only currency and filters ride types by
+  // their `allowedRegions` (a list of region _ids).
   const selectedRegion = useMemo(
     () => regions.find((r) => r._id === watchedRegionId),
     [regions, watchedRegionId],
   );
-
-  // Per-row UI state: whether to show one fare set applied to all days,
-  // or expanded per-day rows. Keyed by the field-array's stable id.
-  const [sameForAll, setSameForAll] = useState<Record<string, boolean>>({});
 
   // Reset on open or pricing change.
   useEffect(() => {
     if (!isOpen) return;
     setSameForAll({});
     if (pricing) {
-      const rows = pricing.rideTypes.map((rt) => ({
-        rideType: refId(rt.rideType),
-        weeklyFare: normaliseWeek(rt.weeklyFare ?? []),
-      }));
+      // Drop rows whose ride type was deleted — they'd load as an empty select
+      // and block save with "Select a ride type" for no visible reason.
+      const rows = pricing.rideTypes
+        .filter((rt) => !!rt.rideType)
+        .map((rt) => ({
+          rideType: refId(rt.rideType),
+          weeklyFare: normaliseWeek(rt.weeklyFare),
+        }));
       reset({
         region: regionRefId(pricing.region),
-        rideTypes: rows,
+        rideTypes: rows.length > 0 ? rows : [blankRow()],
       });
     } else {
       reset(emptyDefaults(defaultRegionId));
     }
   }, [isOpen, pricing, defaultRegionId, reset]);
 
-  // After fields populate (edit mode), default the "same for all" toggle
-  // based on whether the loaded week is uniform.
+  // Once fields populate (edit mode), default each row's toggle from whether
+  // the loaded week is actually uniform.
   useEffect(() => {
     if (!isOpen) return;
     setSameForAll((prev) => {
       const next = { ...prev };
       fields.forEach((f, idx) => {
         if (next[f.id] !== undefined) return;
-        const week = getValues(`rideTypes.${idx}.weeklyFare`);
-        next[f.id] = isUniformWeek(week);
+        next[f.id] = isUniformWeek(getValues(`rideTypes.${idx}.weeklyFare`));
       });
       return next;
     });
@@ -203,47 +194,27 @@ export default function PricingFormModal({
   const createMutation = useCreatePricing();
   const updateMutation = useUpdatePricing();
 
-  // Push day 0's values into days 1–6 for a given ride-type row.
+  // Push day 0's values across the rest of the week for a given row.
   const copyFirstDayToAll = (rowIndex: number) => {
-    const week = getValues(`rideTypes.${rowIndex}.weeklyFare`);
-    if (!week?.length) return;
-    const [first] = week;
-    DAYS.forEach((d) => {
-      if (d.value === 0) return;
-      FARE_FIELDS.forEach((f) => {
-        setValue(
-          `rideTypes.${rowIndex}.weeklyFare.${d.value}.${f.key}` as const,
-          first[f.key],
-          { shouldDirty: true, shouldValidate: false },
-        );
-      });
+    const week = normaliseWeek(getValues(`rideTypes.${rowIndex}.weeklyFare`));
+    setValue(`rideTypes.${rowIndex}.weeklyFare`, spreadAcrossWeek(week[0]), {
+      shouldDirty: true,
+      shouldValidate: true,
     });
   };
 
   const onSubmit = async (values: PricingFormInput) => {
     try {
-      // When "same for all days" is on for a row, mirror day 0 to days 1–6
-      // before submitting so the backend always receives a full week.
-      const rideTypes = values.rideTypes.map((row, idx) => {
-        const fieldId = fields[idx]?.id;
-        const uniform = fieldId ? sameForAll[fieldId] : false;
-        if (!uniform) return row;
-        const [first] = row.weeklyFare;
-        const week: WeeklyFareEntry[] = DAYS.map((d) => ({
-          ...first,
-          dayOfWeek: d.value,
-        }));
-        return { ...row, weeklyFare: week };
-      });
+      // Currency is server-derived from the region, but the update path expects
+      // it echoed back. Fall back to the existing pricing's currency so the
+      // payload shape doesn't depend on whether `regions` has resolved yet.
+      const currency = selectedRegion?.currency ?? pricing?.currency;
 
-      const payload = {
+      const payload: PricingCreateInput = {
         region: values.region,
-        // Echo the selected region's currency back so the update path matches
-        // the backend's expected shape; create accepts it as a no-op.
-        ...(selectedRegion?.currency
-          ? { currency: selectedRegion.currency }
-          : {}),
-        rideTypes,
+        ...(currency ? { currency } : {}),
+        // The resolver already mirrored day 0 across the week for uniform rows.
+        rideTypes: values.rideTypes,
       };
 
       if (isEdit && pricing) {
@@ -257,10 +228,6 @@ export default function PricingFormModal({
     } catch (err) {
       toast.error(getErrorMessage(err));
     }
-  };
-
-  const handleAppend = () => {
-    append(blankRow());
   };
 
   return (
@@ -299,11 +266,17 @@ export default function PricingFormModal({
                     <option value="">
                       {regionsLoading ? "Loading regions…" : "Select region…"}
                     </option>
-                    {regions.map((r) => (
-                      <option key={r._id} value={r._id}>
-                        {r.country} ({r.code})
-                      </option>
-                    ))}
+                    {regions.map((r) => {
+                      // One fare document per region — an already-priced region
+                      // can only be edited, not created again.
+                      const priced = !isEdit && pricedRegionIds?.has(r._id);
+                      return (
+                        <option key={r._id} value={r._id} disabled={priced}>
+                          {r.country} ({r.code})
+                          {priced ? " — already priced" : ""}
+                        </option>
+                      );
+                    })}
                     {/* Keep the loaded value visible if the regions list hasn't returned yet (edit mode). */}
                     {field.value &&
                       !regions.some((r) => r._id === field.value) && (
@@ -319,13 +292,19 @@ export default function PricingFormModal({
                   {errors.region.message as string}
                 </p>
               )}
+              {!isEdit && (
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  Each region has one fare. To add a ride type to a region
+                  that's already priced, edit its pricing instead.
+                </p>
+              )}
             </div>
 
             <div>
               <Label>Currency</Label>
               <Input
                 type="text"
-                value={selectedRegion?.currency ?? ""}
+                value={selectedRegion?.currency ?? pricing?.currency ?? ""}
                 placeholder="—"
                 readOnly
                 disabled
@@ -344,7 +323,7 @@ export default function PricingFormModal({
               </Label>
               <button
                 type="button"
-                onClick={handleAppend}
+                onClick={() => append(blankRow())}
                 disabled={!watchedRegionId}
                 className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-brand-400 dark:hover:bg-brand-500/10"
               >
@@ -456,7 +435,8 @@ export default function PricingFormModal({
                           <NumberField
                             key={f.key}
                             control={control}
-                            name={`rideTypes.${index}.weeklyFare.0.${f.key}` as const}
+                            fareField={f}
+                            name={`rideTypes.${index}.weeklyFare.0.${f.key}`}
                             label={f.label}
                             error={!!rowErr?.weeklyFare?.[0]?.[f.key]}
                             errorMsg={rowErr?.weeklyFare?.[0]?.[f.key]?.message}
@@ -470,10 +450,7 @@ export default function PricingFormModal({
                             <tr>
                               <th className="px-1 py-1 font-medium">Day</th>
                               {FARE_FIELDS.map((f) => (
-                                <th
-                                  key={f.key}
-                                  className="px-1 py-1 font-medium"
-                                >
+                                <th key={f.key} className="px-1 py-1 font-medium">
                                   {f.label}
                                 </th>
                               ))}
@@ -492,9 +469,8 @@ export default function PricingFormModal({
                                   <td key={f.key} className="px-1 py-1.5">
                                     <NumberField
                                       control={control}
-                                      name={
-                                        `rideTypes.${index}.weeklyFare.${d.value}.${f.key}` as const
-                                      }
+                                      fareField={f}
+                                      name={`rideTypes.${index}.weeklyFare.${d.value}.${f.key}`}
                                       hideLabel
                                       label={`${d.long} ${f.label}`}
                                       error={
@@ -537,17 +513,14 @@ export default function PricingFormModal({
             >
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <span className="inline-flex items-center gap-2">
-                  <LoadingSpinner size="sm" />
-                  {isEdit ? "Saving…" : "Creating…"}
-                </span>
-              ) : isEdit ? (
-                "Save changes"
-              ) : (
-                "Create"
-              )}
+            <Button type="submit" size="sm" loading={isSubmitting}>
+              {isSubmitting
+                ? isEdit
+                  ? "Saving…"
+                  : "Creating…"
+                : isEdit
+                  ? "Save changes"
+                  : "Create"}
             </Button>
           </div>
         </fieldset>
@@ -558,11 +531,12 @@ export default function PricingFormModal({
 
 // Tiny field wrapper used only inside this modal — keeps the JSX above readable.
 type FareFieldName =
-  `rideTypes.${number}.weeklyFare.${number}.${(typeof FARE_FIELDS)[number]["key"]}`;
+  `rideTypes.${number}.weeklyFare.${number}.${FareFieldKey}`;
 
 interface NumberFieldProps {
   control: ReturnType<typeof useForm<PricingFormInput>>["control"];
   name: FareFieldName;
+  fareField: FareField;
   label: string;
   hideLabel?: boolean;
   error: boolean;
@@ -572,11 +546,13 @@ interface NumberFieldProps {
 function NumberField({
   control,
   name,
+  fareField,
   label,
   hideLabel,
   error,
   errorMsg,
 }: NumberFieldProps) {
+  const isMultiplier = fareField.kind === "multiplier";
   return (
     <div>
       {!hideLabel && (
@@ -602,6 +578,10 @@ function NumberField({
             }}
             onBlur={field.onBlur}
             inputMode="decimal"
+            // Money takes cents; surge is a multiplier floored at 1× (0 would
+            // make the ride free).
+            step={isMultiplier ? 0.1 : 0.01}
+            min={isMultiplier ? "1" : "0"}
             error={error}
             aria-invalid={error}
           />

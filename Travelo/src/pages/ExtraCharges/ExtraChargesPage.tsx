@@ -7,46 +7,51 @@ import EmptyState from "../../components/common/EmptyState";
 import Pagination from "../../components/common/Pagination";
 import DeleteConfirmDialog from "../../components/common/DeleteConfirmDialog";
 import Button from "../../components/ui/button/Button";
-import PricingCard from "../../components/FareManagement/PricingCard";
-import PricingFormModal from "../../components/FareManagement/PricingFormModal";
+import ExtraChargeCard from "../../components/ExtraCharges/ExtraChargeCard";
+import ExtraChargeFormModal from "../../components/ExtraCharges/ExtraChargeFormModal";
 import {
-  useDeletePricing,
-  usePricingsQuery,
-} from "../../hooks/queries/usePricings";
-import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
+  useExtraChargesQuery,
+  useDeleteExtraCharge,
+} from "../../hooks/queries/useExtraCharges";
 import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
 import { regionRefId, regionDisplayName } from "../../lib/refs";
-import type { Pricing } from "../../types/pricing";
+import type { ExtraChargeConfig } from "../../types/extraCharge";
 
-type TabValue = "ALL" | string; // "ALL" or a region _id
+type TabValue = "ALL" | string;
 
 const DEFAULT_PAGE_SIZE = 10;
 
-export default function FareManagementPage() {
+export default function ExtraChargesPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const [activeTab, setActiveTab] = useState<TabValue>("ALL");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Pricing | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Pricing | null>(null);
+  const [editing, setEditing] = useState<ExtraChargeConfig | null>(null);
+  const [pendingDelete, setPendingDelete] =
+    useState<ExtraChargeConfig | null>(null);
 
-  // The whole fare list — one document per region, so filtering and paging
-  // happen here rather than on the server. That keeps the tab counts and the
-  // pager describing the same set of records.
-  const { data, isLoading, isFetching, error } = usePricingsQuery();
-  const deleteMutation = useDeletePricing();
+  const { data, isLoading, isFetching, error } = useExtraChargesQuery({
+    page,
+    limit,
+  });
+  const deleteMutation = useDeleteExtraCharge();
 
-  // Pull ride types (large page) so cards can resolve _id → title.
-  const { data: rideTypesData } = useRideTypesQuery({ page: 1, limit: 100 });
   const { data: regions = [] } = useRegionsQuery();
 
-  const rideTypeNames = useMemo(() => {
-    const map = new Map<string, string>();
-    (rideTypesData?.rideTypes ?? []).forEach((rt) => map.set(rt._id, rt.title));
-    return map;
-  }, [rideTypesData]);
+  const configs = useMemo(() => data?.extraCharges ?? [], [data]);
+  const meta = data?.meta;
+
+  const tabs = useMemo<{ value: TabValue; label: string }[]>(() => {
+    const base: { value: TabValue; label: string }[] = [
+      { value: "ALL", label: "All" },
+    ];
+    return [
+      ...base,
+      ...regions.map((r) => ({ value: r._id, label: r.country })),
+    ];
+  }, [regions]);
 
   const regionNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -54,66 +59,45 @@ export default function FareManagementPage() {
     return map;
   }, [regions]);
 
-  const pricings = useMemo(() => data ?? [], [data]);
-
-  // The backend allows exactly one fare document per region ("Fare already
-  // exists" on a second POST). Adding a ride type to an already-priced region
-  // means editing that region's fare, not creating another one — so these
-  // regions are offered for edit but not for create.
-  const pricedRegionIds = useMemo(
-    () => new Set(pricings.map((p) => regionRefId(p.region))),
-    [pricings],
+  // One config per region: gate Create once every region is covered, and
+  // hide already-configured regions inside the create form.
+  const configuredRegionIds = useMemo(
+    () => new Set(configs.map((c) => regionRefId(c.region)).filter(Boolean)),
+    [configs],
   );
+  const allRegionsConfigured =
+    regions.length > 0 && regions.every((r) => configuredRegionIds.has(r._id));
 
-  // Build tabs from fetched regions so they reflect what's actually configured
-  // in the backend, not a hardcoded list.
-  const tabs = useMemo<{ value: TabValue; label: string }[]>(
-    () => [
-      { value: "ALL", label: "All" },
-      ...regions.map((r) => ({ value: r._id, label: r.country })),
-    ],
-    [regions],
-  );
-
-  const filtered = useMemo(
-    () =>
-      activeTab === "ALL"
-        ? pricings
-        : pricings.filter((p) => regionRefId(p.region) === activeTab),
-    [pricings, activeTab],
-  );
-
-  // Counts are global now — `filtered` spans every record, not just one page.
-  const tabCount = (value: TabValue) =>
-    value === "ALL"
-      ? pricings.length
-      : pricings.filter((p) => regionRefId(p.region) === value).length;
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const currentPage = Math.min(page, totalPages);
-  const paged = useMemo(
-    () => filtered.slice((currentPage - 1) * limit, currentPage * limit),
-    [filtered, currentPage, limit],
-  );
-
-  // Reset to page 1 when tab changes.
   useEffect(() => {
     setPage(1);
   }, [activeTab]);
 
-  // If we land past the last page (e.g. after a delete), pull back.
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (meta && page > meta.totalPages && meta.totalPages > 0) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
+
+  const filtered = useMemo(
+    () =>
+      activeTab === "ALL"
+        ? configs
+        : configs.filter((c) => regionRefId(c.region) === activeTab),
+    [configs, activeTab],
+  );
+
+  const tabCount = (value: TabValue) =>
+    value === "ALL"
+      ? configs.length
+      : configs.filter((c) => regionRefId(c.region) === value).length;
 
   const openCreate = () => {
     setEditing(null);
     setIsFormOpen(true);
   };
 
-  const openEdit = (p: Pricing) => {
-    setEditing(p);
+  const openEdit = (c: ExtraChargeConfig) => {
+    setEditing(c);
     setIsFormOpen(true);
   };
 
@@ -127,7 +111,7 @@ export default function FareManagementPage() {
     try {
       await deleteMutation.mutateAsync(pendingDelete._id);
       toast.success(
-        `Deleted pricing for ${regionDisplayName(
+        `Deleted extra charges for ${regionDisplayName(
           pendingDelete.region,
           regionNameById,
         )}`,
@@ -135,9 +119,7 @@ export default function FareManagementPage() {
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
-        // Already gone — close the dialog rather than leaving it open on a
-        // record that no longer exists.
-        toast.error("That pricing was already removed.");
+        toast.error("That configuration was already removed.");
         setPendingDelete(null);
       } else {
         toast.error(getErrorMessage(err));
@@ -145,46 +127,37 @@ export default function FareManagementPage() {
     }
   };
 
-  // Only pre-select the active region if it can actually be created.
   const defaultRegionIdForCreate =
-    activeTab !== "ALL" && !pricedRegionIds.has(activeTab)
+    activeTab !== "ALL" && !configuredRegionIds.has(activeTab)
       ? activeTab
       : undefined;
-
-  // Nothing left to create once every region has a fare.
-  const allRegionsPriced =
-    regions.length > 0 && regions.every((r) => pricedRegionIds.has(r._id));
 
   return (
     <>
       <PageMeta
-        title="Fare Management | Travelo Admin"
-        description="Manage pricing rules per region and ride type."
+        title="Extra Charges | Travelo Admin"
+        description="Configure the fixed surcharges drivers can apply before finishing a ride."
       />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
-            Fare Management
+            Extra Charges
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Define base fares, per-km / per-minute rates, minimums, and
-            cancellation fees for each region's ride types.
+            Per-region amounts for parking, congestion, airport, toll, cleaning
+            and pet charges. Drivers only tick a box — these amounts are what
+            riders pay. Completed rides keep the amounts they were billed.
           </p>
         </div>
 
         <Button
           size="sm"
           onClick={openCreate}
-          disabled={allRegionsPriced}
-          title={
-            allRegionsPriced
-              ? "Every region already has a fare — edit one to change it."
-              : undefined
-          }
+          disabled={allRegionsConfigured}
           startIcon={<Plus className="size-4" />}
         >
-          Create Pricing
+          Create Extra Charges
         </Button>
       </div>
 
@@ -227,29 +200,30 @@ export default function FareManagementPage() {
 
       {/* Content */}
       {isLoading ? (
-        <LoadingSpinner fullPage label="Loading pricings…" />
+        <LoadingSpinner fullPage label="Loading extra charges…" />
       ) : error ? (
         <EmptyState
-          title="Failed to load pricings"
+          title="Failed to load extra charges"
           description={getErrorMessage(error)}
         />
-      ) : paged.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
           title={
             activeTab === "ALL"
-              ? "No pricings yet"
-              : `No pricings for ${
+              ? "No extra charges yet"
+              : `No extra charges for ${
                   regionNameById.get(activeTab) ?? "this region"
                 }`
           }
-          description="Create one to get started."
+          description="Create a configuration so drivers can apply fixed surcharges at ride completion."
           action={
             <Button
               size="sm"
               onClick={openCreate}
+              disabled={allRegionsConfigured}
               startIcon={<Plus className="size-4" />}
             >
-              Create Pricing
+              Create Extra Charges
             </Button>
           }
         />
@@ -258,11 +232,10 @@ export default function FareManagementPage() {
           <div
             className={`space-y-4 ${isFetching ? "opacity-70 transition" : ""}`}
           >
-            {paged.map((p) => (
-              <PricingCard
-                key={p._id}
-                pricing={p}
-                rideTypeNames={rideTypeNames}
+            {filtered.map((c) => (
+              <ExtraChargeCard
+                key={c._id}
+                config={c}
                 regionNameById={regionNameById}
                 onEdit={openEdit}
                 onDelete={setPendingDelete}
@@ -270,13 +243,13 @@ export default function FareManagementPage() {
             ))}
           </div>
 
-          {total > 0 && (
+          {meta && meta.total > 0 && (
             <div className="mt-6">
               <Pagination
-                page={currentPage}
-                totalPages={totalPages}
-                total={total}
-                limit={limit}
+                page={meta.page}
+                totalPages={meta.totalPages}
+                total={meta.total}
+                limit={meta.limit}
                 onPageChange={setPage}
                 onLimitChange={(newLimit) => {
                   setLimit(newLimit);
@@ -289,23 +262,23 @@ export default function FareManagementPage() {
         </>
       )}
 
-      <PricingFormModal
+      <ExtraChargeFormModal
         isOpen={isFormOpen}
         onClose={closeForm}
-        pricing={editing}
+        config={editing}
         defaultRegionId={defaultRegionIdForCreate}
-        pricedRegionIds={pricedRegionIds}
+        configuredRegionIds={configuredRegionIds}
       />
 
       <DeleteConfirmDialog
         isOpen={!!pendingDelete}
-        title="Delete this pricing?"
+        title="Delete this configuration?"
         description={
           pendingDelete
-            ? `The pricing for ${regionDisplayName(
+            ? `Extra charges for ${regionDisplayName(
                 pendingDelete.region,
                 regionNameById,
-              )} will be permanently removed. This cannot be undone.`
+              )} will be permanently removed. Drivers there will no longer see any finish-screen charges. Completed rides keep their billed amounts.`
             : ""
         }
         isLoading={deleteMutation.isPending}

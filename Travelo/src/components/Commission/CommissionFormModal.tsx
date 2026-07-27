@@ -15,13 +15,14 @@ import {
   type CommissionFormInput,
 } from "../../schemas/commission.schema";
 import { getErrorMessage } from "../../lib/error";
+import { refId, regionRefId } from "../../lib/refs";
 import {
   useCreateCommission,
   useUpdateCommission,
 } from "../../hooks/queries/useCommissions";
 import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
 import { useRegionsQuery } from "../../hooks/queries/useRegions";
-import type { Commission, CommissionEntry } from "../../types/commission";
+import type { Commission } from "../../types/commission";
 
 interface Props {
   isOpen: boolean;
@@ -56,20 +57,6 @@ const emptyDefaults = (defaultRegionId?: string): CommissionFormInput => ({
   region: defaultRegionId ?? "",
   commissions: [blankRow()],
 });
-
-// Read the populated rideType _id whether the API returned an object, a
-// string, or null.
-const rideTypeId = (
-  r: CommissionEntry["rideType"] | null | undefined,
-): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-const regionRefId = (r: Commission["region"] | null | undefined): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
 
 export default function CommissionFormModal({
   isOpen,
@@ -120,7 +107,7 @@ export default function CommissionFormModal({
         commissions: commission.commissions
           .filter((c) => !!c.rideType)
           .map((c) => ({
-            rideType: rideTypeId(c.rideType),
+            rideType: refId(c.rideType),
             bookingType: c.bookingType as (typeof BOOKING_TYPES)[number],
             commissionType: c.commissionType,
             commission: c.commission,

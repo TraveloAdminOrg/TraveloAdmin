@@ -2,9 +2,9 @@ import { Pencil, Percent, Trash2, Wallet } from "lucide-react";
 import type {
   Commission,
   CommissionBookingType,
-  CommissionEntry,
 } from "../../types/commission";
 import { formatDate } from "../../lib/format";
+import { refId, refTitle } from "../../lib/refs";
 
 interface Props {
   commission: Commission;
@@ -38,20 +38,6 @@ const bookingLabel = (b: CommissionBookingType): string =>
 const bookingTone = (b: CommissionBookingType): string =>
   BOOKING_TONES[b as string] ??
   "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300";
-
-const refId = (
-  r: CommissionEntry["rideType"] | null | undefined,
-): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-const refTitle = (
-  r: CommissionEntry["rideType"] | null | undefined,
-): string | undefined => {
-  if (!r || typeof r === "string") return undefined;
-  return r.title;
-};
 
 export default function CommissionCard({
   commission,

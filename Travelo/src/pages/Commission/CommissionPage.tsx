@@ -16,23 +16,12 @@ import {
 import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
 import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
+import { regionRefId, regionDisplayName } from "../../lib/refs";
 import type { Commission } from "../../types/commission";
 
 type TabValue = "ALL" | string;
 
 const DEFAULT_PAGE_SIZE = 10;
-
-const regionRefId = (r: Commission["region"] | null | undefined): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-const regionDisplayName = (
-  r: Commission["region"] | null | undefined,
-): string => {
-  if (!r || typeof r === "string") return "—";
-  return r.country || r.code || "—";
-};
 
 export default function CommissionPage() {
   const [page, setPage] = useState(1);
@@ -122,12 +111,18 @@ export default function CommissionPage() {
     try {
       await deleteMutation.mutateAsync(pendingDelete._id);
       toast.success(
-        `Deleted commission for ${regionDisplayName(pendingDelete.region)}`,
+        `Deleted commission for ${regionDisplayName(
+          pendingDelete.region,
+          regionNameById,
+        )}`,
       );
       setPendingDelete(null);
     } catch (err) {
       if (isNotFoundError(err)) {
+        // Already gone — close the dialog rather than leaving it open on a
+        // record that no longer exists.
         toast.error("That commission was already removed.");
+        setPendingDelete(null);
       } else {
         toast.error(getErrorMessage(err));
       }
@@ -279,6 +274,7 @@ export default function CommissionPage() {
           pendingDelete
             ? `The commission for ${regionDisplayName(
                 pendingDelete.region,
+                regionNameById,
               )} will be permanently removed. This cannot be undone.`
             : ""
         }

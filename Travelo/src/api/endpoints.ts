@@ -62,10 +62,6 @@ export const ENDPOINTS = {
     drivers: "/report/leaderboard",
     export: (resource: string) => `/report/export/${resource}`,
   },
-  fares: {
-    base: "/fares",
-    byId: (id: string) => `/fares/${id}`,
-  },
   roles: {
     base: "/roles",
     byId: (id: string) => `/roles/${id}`,
@@ -83,8 +79,7 @@ export const ENDPOINTS = {
     byId: (id: string) => `/rideType/${id}`,
   },
   pricings: {
-    base: "/fare",
-    list: "/fare/",
+    base: "/fare/",
     byId: (id: string) => `/fare/${id}`,
   },
   regions: {
@@ -100,6 +95,10 @@ export const ENDPOINTS = {
   commissions: {
     base: "/commission/",
     byId: (id: string) => `/commission/${id}`,
+  },
+  extraCharges: {
+    base: "/extra-charge/",
+    byId: (id: string) => `/extra-charge/${id}`,
   },
   dashboard: {
     kpis: "/adminDashboard/",

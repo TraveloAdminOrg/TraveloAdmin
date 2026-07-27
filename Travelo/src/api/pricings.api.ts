@@ -1,10 +1,6 @@
 import { apiClient } from "./client";
 import { ENDPOINTS } from "./endpoints";
-import type {
-  ApiResponse,
-  PaginationMeta,
-  PaginationParams,
-} from "../types/api";
+import type { ApiResponse, PaginationMeta } from "../types/api";
 import type {
   Pricing,
   PricingCreateInput,
@@ -15,28 +11,26 @@ import type {
 // GET /fare/?page=&limit= → `{ fares: Pricing[], meta }`.
 interface ListEnvelope {
   fares: Pricing[];
-  meta: PaginationMeta;
+  meta?: PaginationMeta;
 }
 
 interface SingleEnvelope {
   fare: Pricing;
 }
 
-export interface PricingsListResult {
-  pricings: Pricing[];
-  meta: PaginationMeta;
-}
+// A fare document is one per region, so the whole collection is inherently tiny.
+// We pull it in a single request and let the page filter + paginate client-side —
+// that's what keeps the region tab counts and the pager consistent with each
+// other. If fares ever outgrow this, add a server-side `?region=` filter.
+const MAX_PAGE_SIZE = 100;
 
 export const pricingsApi = {
-  list: ({ page = 1, limit = 10 }: PaginationParams = {}) =>
+  list: () =>
     apiClient
-      .get<ApiResponse<ListEnvelope>>(ENDPOINTS.pricings.list, {
-        params: { page, limit },
+      .get<ApiResponse<ListEnvelope>>(ENDPOINTS.pricings.base, {
+        params: { page: 1, limit: MAX_PAGE_SIZE },
       })
-      .then((r) => ({
-        pricings: r.data.data.fares ?? [],
-        meta: r.data.data.meta,
-      })),
+      .then((r) => r.data.data.fares ?? []),
 
   create: (data: PricingCreateInput) =>
     apiClient

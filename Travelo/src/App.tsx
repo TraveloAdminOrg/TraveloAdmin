@@ -28,6 +28,7 @@
   import UserRideHistoryPage from "./pages/UserRideHistoryPage";
   import FareManagement from "./pages/FareManagement/FareManagementPage";
   import CommissionPage from "./pages/Commission/CommissionPage";
+  import ExtraChargesPage from "./pages/ExtraCharges/ExtraChargesPage";
   import RegionPage from "./pages/Region/RegionPage";
   // Role Management is hidden — re-enable by uncommenting these imports and
   // the routes below.
@@ -89,6 +90,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
               <Route path="fare-management" element={<FareManagement />} />
               {/* Commission */}
               <Route path="commission" element={<CommissionPage />} />
+              {/* Extra Charges (finish-ride surcharges) */}
+              <Route path="extra-charges" element={<ExtraChargesPage />} />
               {/* Regions */}
               <Route path="regions" element={<RegionPage />} />
 

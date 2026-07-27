@@ -66,6 +66,29 @@ export interface RideFareBreakdown {
   cleaningCharge: number;
 }
 
+// One itemised surcharge line, snapshotted onto the ride at completion.
+export interface RideExtraChargeLine {
+  code?: string;
+  label?: string;
+  amount?: number;
+}
+
+// Persisted at completion — the settled record of what the ride cost.
+export interface RideReceipt {
+  baseFare?: number;
+  stopCharges?: number;
+  waitingCharges?: number;
+  cleaningCharges?: number;
+  tollCharges?: number;
+  extraCharges?: RideExtraChargeLine[];
+  petCharge?: number;
+  tip?: number;
+  subtotal?: number;
+  total?: number;
+  currency?: string;
+  issuedAt?: string;
+}
+
 export interface Ride {
   _id: string;
   // userId/driverId may be a populated object or just an id depending on the
@@ -84,7 +107,15 @@ export interface Ride {
   passengers: number;
 
   estimatedFare: number;
+  // Final settled fare — present once the ride completes.
+  fare?: number;
+  tip?: number;
   fareBreakdown?: RideFareBreakdown;
+  receipt?: RideReceipt;
+  extraCharges?: RideExtraChargeLine[];
+  petCharge?: number;
+  tollCharges?: number;
+  cleaningCharges?: number;
   currency: string;
   paymentMethod: RidePaymentMethod;
   paymentStatus: RidePaymentStatus;
