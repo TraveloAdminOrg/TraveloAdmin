@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { Eye, Search } from "lucide-react";
+import RideDetailsModal from "../../components/Rides/RideDetailsModal";
 import PageMeta from "../../components/common/PageMeta";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
@@ -92,6 +93,7 @@ export default function RidesPage() {
   const [activeRegion, setActiveRegion] = useState<RegionTab>("ALL");
   const [status, setStatus] = useState<RideStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, error } = useRidesQuery({
     page,
@@ -224,6 +226,9 @@ export default function RidesPage() {
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Payment</th>
                   <th className="px-4 py-3 font-medium">Created</th>
+                  <th className="px-4 py-3 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               {grouped.map((group) => (
@@ -233,7 +238,7 @@ export default function RidesPage() {
                 >
                   <tr className="bg-gray-50/60 dark:bg-white/[0.02]">
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300"
                     >
                       {regionLabel(group.region as RegionCode)}
@@ -243,7 +248,7 @@ export default function RidesPage() {
                     </td>
                   </tr>
                   {group.rides.map((r) => (
-                    <RideRow key={r._id} ride={r} />
+                    <RideRow key={r._id} ride={r} onView={setSelectedRideId} />
                   ))}
                 </tbody>
               ))}
@@ -268,11 +273,22 @@ export default function RidesPage() {
           )}
         </>
       )}
+
+      <RideDetailsModal
+        rideId={selectedRideId}
+        onClose={() => setSelectedRideId(null)}
+      />
     </>
   );
 }
 
-function RideRow({ ride: r }: { ride: Ride }) {
+function RideRow({
+  ride: r,
+  onView,
+}: {
+  ride: Ride;
+  onView: (id: string) => void;
+}) {
   const rider = r.userId as RidePerson | string | null;
   const driver = r.driverId as RidePerson | string | null | undefined;
   const rideType = r.rideType as RideRideTypeRef | string | null;
@@ -354,6 +370,17 @@ function RideRow({ ride: r }: { ride: Ride }) {
       </td>
       <td className="px-4 py-3 align-top text-[11px] text-gray-500 dark:text-gray-400">
         {r.createdAt ? formatDateTime(r.createdAt) : "—"}
+      </td>
+      <td className="px-4 py-3 align-top">
+        <button
+          type="button"
+          onClick={() => onView(r._id)}
+          aria-label="View ride details"
+          title="View details"
+          className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+        >
+          <Eye className="size-4" />
+        </button>
       </td>
     </tr>
   );

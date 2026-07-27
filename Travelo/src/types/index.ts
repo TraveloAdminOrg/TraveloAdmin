@@ -4,6 +4,7 @@ export * from "./api";
 export * from "./auth";
 export * from "./commission";
 export * from "./driver";
+export * from "./extraCharge";
 export * from "./faq";
 export * from "./notification";
 export * from "./payment";

@@ -1,11 +1,15 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
-import type {
-  Pricing,
-  PricingRideType,
-  WeeklyFareEntry,
-} from "../../types/pricing";
-import { formatDate } from "../../lib/format";
+import type { Pricing, WeeklyFareEntry } from "../../types/pricing";
+import { formatCurrency, formatDate } from "../../lib/format";
+import { refId, refTitle, regionDisplayName } from "../../lib/refs";
+import {
+  DAYS,
+  FARE_FIELDS,
+  collapseUniform,
+  isWeekend,
+  normaliseWeek,
+} from "../../lib/pricing";
 
 interface Props {
   pricing: Pricing;
@@ -14,47 +18,6 @@ interface Props {
   onEdit: (p: Pricing) => void;
   onDelete: (p: Pricing) => void;
 }
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-// Defensive: rideType may be null if the underlying ride type was deleted.
-const refId = (r: PricingRideType["rideType"] | null | undefined): string => {
-  if (!r) return "";
-  return typeof r === "string" ? r : r._id ?? "";
-};
-
-const refTitle = (
-  r: PricingRideType["rideType"] | null | undefined,
-): string | undefined => {
-  if (!r || typeof r === "string") return undefined;
-  return r.title;
-};
-
-// Fields that contribute to "is the week uniform" comparison.
-const COMPARABLE_FIELDS: (keyof Omit<WeeklyFareEntry, "dayOfWeek">)[] = [
-  "baseFare",
-  "pricePerKm",
-  "pricePerMinute",
-  "minimumFare",
-  "cancellationFee",
-  "cleaningCharge",
-  "waitingCharge",
-  "surgeMultiplier",
-];
-
-// Returns null if all 7 days share identical fare values (so we can collapse
-// the row to a single line); otherwise returns the seven entries sorted.
-const collapseUniform = (
-  week: WeeklyFareEntry[],
-): WeeklyFareEntry | null => {
-  if (week.length !== 7) return null;
-  const sorted = [...week].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  const [first] = sorted;
-  const uniform = sorted.every((d) =>
-    COMPARABLE_FIELDS.every((k) => d[k] === first[k]),
-  );
-  return uniform ? first : null;
-};
 
 export default function PricingCard({
   pricing,
@@ -66,15 +29,9 @@ export default function PricingCard({
   // Track which ride-type rows are expanded to show their per-day breakdown.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // `region` may be either the populated object or just an _id depending on
-  // which endpoint produced it (GET populates, POST/PATCH return the id).
-  const regionObj =
-    typeof pricing.region === "string" ? null : pricing.region;
-  const regionId =
-    typeof pricing.region === "string" ? pricing.region : pricing.region?._id;
+  const regionObj = typeof pricing.region === "string" ? null : pricing.region;
   const regionCode = regionObj?.code ?? "";
-  const regionName =
-    regionObj?.country ?? (regionId ? regionNameById?.get(regionId) : null) ?? "—";
+  const regionName = regionDisplayName(pricing.region, regionNameById);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition hover:shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
@@ -134,21 +91,18 @@ export default function PricingCard({
             <tr>
               <th className="px-4 py-2 font-medium">Ride type</th>
               <th className="px-4 py-2 font-medium">Day</th>
-              <th className="px-4 py-2 text-right font-medium">Base</th>
-              <th className="px-4 py-2 text-right font-medium">Per km</th>
-              <th className="px-4 py-2 text-right font-medium">Per min</th>
-              <th className="px-4 py-2 text-right font-medium">Min fare</th>
-              <th className="px-4 py-2 text-right font-medium">Cancel</th>
-              <th className="px-4 py-2 text-right font-medium">Cleaning</th>
-              <th className="px-4 py-2 text-right font-medium">Waiting</th>
-              <th className="px-4 py-2 text-right font-medium">Surge</th>
+              {FARE_FIELDS.map((f) => (
+                <th key={f.key} className="px-4 py-2 text-right font-medium">
+                  {f.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {pricing.rideTypes.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={2 + FARE_FIELDS.length}
                   className="px-4 py-6 text-center text-gray-500 dark:text-gray-400"
                 >
                   No ride types configured.
@@ -157,18 +111,16 @@ export default function PricingCard({
             ) : (
               pricing.rideTypes.map((rt, idx) => {
                 const id = refId(rt.rideType);
-                const title =
-                  refTitle(rt.rideType) ?? rideTypeNames.get(id);
-                const uniform = collapseUniform(rt.weeklyFare ?? []);
-                const isOpen = expanded[`${id}-${idx}`] ?? false;
-                const week = [...(rt.weeklyFare ?? [])].sort(
-                  (a, b) => a.dayOfWeek - b.dayOfWeek,
-                );
+                const title = refTitle(rt.rideType) ?? rideTypeNames.get(id);
+                const uniform = collapseUniform(rt.weeklyFare);
+                const rowKey = `${id}-${idx}`;
+                const isOpen = expanded[rowKey] ?? false;
+                const week = normaliseWeek(rt.weeklyFare);
 
                 if (uniform) {
                   return (
                     <tr
-                      key={`${id}-${idx}`}
+                      key={rowKey}
                       className="border-t border-gray-100 dark:border-gray-800"
                     >
                       <td className="px-4 py-2.5 font-medium capitalize text-gray-800 dark:text-white/90">
@@ -187,10 +139,8 @@ export default function PricingCard({
                 }
 
                 return (
-                  <Fragment key={`${id}-${idx}`}>
-                    <tr
-                      className="border-t border-gray-100 dark:border-gray-800"
-                    >
+                  <Fragment key={rowKey}>
+                    <tr className="border-t border-gray-100 dark:border-gray-800">
                       <td className="px-4 py-2.5 font-medium capitalize text-gray-800 dark:text-white/90">
                         {title ?? (
                           <span className="text-gray-400 dark:text-gray-500">
@@ -202,10 +152,7 @@ export default function PricingCard({
                         <button
                           type="button"
                           onClick={() =>
-                            setExpanded((p) => ({
-                              ...p,
-                              [`${id}-${idx}`]: !isOpen,
-                            }))
+                            setExpanded((p) => ({ ...p, [rowKey]: !isOpen }))
                           }
                           className="inline-flex items-center gap-1 rounded-md text-[11px] font-medium text-brand-600 hover:underline dark:text-brand-400"
                         >
@@ -218,32 +165,32 @@ export default function PricingCard({
                         </button>
                       </td>
                       <td
-                        colSpan={8}
+                        colSpan={FARE_FIELDS.length}
                         className="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400"
                       >
                         {/* Range hint so admins see the spread without expanding */}
-                        Base {pricing.currency} {minMax(week, "baseFare")} ·
-                        Per km {pricing.currency} {minMax(week, "pricePerKm")}
+                        Base {minMax(week, "baseFare", pricing.currency)} · Per
+                        km {minMax(week, "pricePerKm", pricing.currency)}
                       </td>
                     </tr>
                     {isOpen &&
                       week.map((d) => {
                         // Sun (0) and Sat (6) get a slight tint so weekends
                         // are easy to spot when scanning the breakdown.
-                        const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
+                        const weekend = isWeekend(d.dayOfWeek);
                         return (
                           <tr
-                            key={`${id}-${idx}-${d.dayOfWeek}`}
+                            key={`${rowKey}-${d.dayOfWeek}`}
                             className={`border-t border-dashed border-gray-100 dark:border-gray-800 ${
-                              isWeekend
+                              weekend
                                 ? "bg-warning-50/40 dark:bg-warning-500/[0.04]"
                                 : "bg-gray-50/40 dark:bg-white/[0.02]"
                             }`}
                           >
                             <td />
                             <td className="px-4 py-2 text-gray-600 dark:text-gray-300">
-                              {DAY_LABELS[d.dayOfWeek]}
-                              {isWeekend && (
+                              {DAYS[d.dayOfWeek]?.short}
+                              {weekend && (
                                 <span className="ml-1 text-[9px] uppercase tracking-wide text-warning-600 dark:text-warning-400">
                                   wknd
                                 </span>
@@ -273,42 +220,35 @@ function FareCells({
 }) {
   return (
     <>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.baseFare}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.pricePerKm}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.pricePerMinute}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.minimumFare}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.cancellationFee}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.cleaningCharge}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {currency} {row.waitingCharge}
-      </td>
-      <td className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">
-        {row.surgeMultiplier}
-        <span className="ml-0.5 text-[10px] text-gray-400">×</span>
-      </td>
+      {FARE_FIELDS.map((f) => (
+        <td
+          key={f.key}
+          className="px-4 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300"
+        >
+          {f.kind === "multiplier" ? (
+            <>
+              {row[f.key]}
+              <span className="ml-0.5 text-[10px] text-gray-400">×</span>
+            </>
+          ) : (
+            formatCurrency(row[f.key], currency)
+          )}
+        </td>
+      ))}
     </>
   );
 }
 
 function minMax(
   week: WeeklyFareEntry[],
-  field: keyof Omit<WeeklyFareEntry, "dayOfWeek">,
+  field: "baseFare" | "pricePerKm",
+  currency: string,
 ): string {
   if (!week.length) return "—";
   const values = week.map((d) => d[field]);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  return min === max ? `${min}` : `${min}–${max}`;
+  return min === max
+    ? formatCurrency(min, currency)
+    : `${formatCurrency(min, currency)}–${formatCurrency(max, currency)}`;
 }

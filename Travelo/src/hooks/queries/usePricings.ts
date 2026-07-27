@@ -1,11 +1,5 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { pricingsApi } from "../../api/pricings.api";
-import type { PaginationParams } from "../../types/api";
 import type {
   PricingCreateInput,
   PricingUpdateInput,
@@ -14,16 +8,15 @@ import type {
 export const pricingKeys = {
   all: ["pricings"] as const,
   lists: () => [...pricingKeys.all, "list"] as const,
-  list: (params: PaginationParams) =>
-    [...pricingKeys.lists(), params] as const,
   detail: (id: string) => [...pricingKeys.all, "detail", id] as const,
 };
 
-export const usePricingsQuery = (params: PaginationParams = {}) =>
+// The full fare list — one document per region, so it's small enough to fetch
+// whole. The page filters and paginates it client-side.
+export const usePricingsQuery = () =>
   useQuery({
-    queryKey: pricingKeys.list(params),
-    queryFn: () => pricingsApi.list(params),
-    placeholderData: keepPreviousData,
+    queryKey: pricingKeys.lists(),
+    queryFn: () => pricingsApi.list(),
   });
 
 export const useCreatePricing = () => {

@@ -40,7 +40,9 @@ export interface PricingRideTypeRef {
 }
 
 export interface PricingRideType {
-  rideType: PricingRideTypeRef | string;
+  // Populated on GET, a bare _id on write responses, and null once the
+  // underlying ride type has been deleted.
+  rideType: PricingRideTypeRef | string | null;
   weeklyFare: WeeklyFareEntry[];
 }
 

@@ -15,10 +15,12 @@ export const weeklyFareEntrySchema = z.object({
   cancellationFee: moneyField("Cancellation fee"),
   cleaningCharge: moneyField("Cleaning charge"),
   waitingCharge: moneyField("Waiting charge"),
-  // Backend stores surge as a plain number (e.g. 1.5 = 50% surge, or 30 if
-  // they encode it as a percentage). Bounded the same way as money fields
-  // so the form can't submit something absurd.
-  surgeMultiplier: moneyField("Surge multiplier"),
+  // The fare is multiplied by this, so 1 is "no surge" and anything below 1
+  // would discount (0 would make the ride free). Not a money field.
+  surgeMultiplier: z
+    .number({ message: "Surge multiplier is required" })
+    .min(1, "Surge cannot be below 1×")
+    .max(10, "Surge cannot exceed 10×"),
 });
 
 export const pricingRideTypeSchema = z.object({
@@ -55,5 +57,4 @@ export const pricingFormSchema = z
     },
   );
 
-export type WeeklyFareEntryInput = z.infer<typeof weeklyFareEntrySchema>;
 export type PricingFormInput = z.infer<typeof pricingFormSchema>;
