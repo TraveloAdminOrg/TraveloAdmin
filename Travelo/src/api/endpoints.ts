@@ -4,8 +4,12 @@
 export const ENDPOINTS = {
   auth: {
     login: "/admin/sign",
-    refresh: "/admin/refresh-token",
-    logout: "/admin/logout",
+    // These must match adminRoutes.ts exactly. They previously read
+    // "/admin/refresh-token" and "/admin/logout", which 404'd — the refresh
+    // interceptor treated that as an expired session and bounced every admin
+    // to /signin the moment their access token aged out.
+    refresh: "/admin/refresh",
+    logout: "/admin/signout",
     me: "/admin/me",
   },
   users: {
@@ -99,6 +103,16 @@ export const ENDPOINTS = {
   extraCharges: {
     base: "/extra-charge/",
     byId: (id: string) => `/extra-charge/${id}`,
+  },
+  sos: {
+    base: "/sos",
+    active: "/sos/active",
+    byId: (id: string) => `/sos/${id}`,
+    accept: (id: string) => `/sos/${id}/accept`,
+    end: (id: string) => `/sos/${id}/admin-end`,
+    // WebRTC ICE servers for the operator's leg of an SOS call. Same payload as
+    // the app's /call/ice-servers, on an admin-authenticated route.
+    iceServers: "/call/ice-servers/admin",
   },
   dashboard: {
     kpis: "/adminDashboard/",

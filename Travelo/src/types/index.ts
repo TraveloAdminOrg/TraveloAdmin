@@ -15,4 +15,5 @@ export * from "./review";
 export * from "./ride";
 export * from "./rideType";
 export * from "./role";
+export * from "./sos";
 export * from "./user";

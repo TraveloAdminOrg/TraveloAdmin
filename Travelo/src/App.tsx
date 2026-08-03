@@ -38,6 +38,7 @@
   // import EditRolePage from "./pages/RoleManagement/EditRolePage";
   import RideTypesPage from "./pages/RideTypes/RideTypesPage";
   import RidesPage from "./pages/Rides/RidesPage";
+  import SosHistoryPage from "./pages/Sos/SosHistoryPage";
   import DriverApprovalsPage from "./pages/DriverApprovals/DriverApprovalsPage";
   import ReviewsPage from "./pages/Reviews/ReviewsPage";
   import NotificationsPage from "./pages/Notifications/NotificationsPage";
@@ -100,6 +101,7 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
 
               {/* New ride-hailing operations features */}
               <Route path="rides" element={<RidesPage />} />
+              <Route path="sos" element={<SosHistoryPage />} />
               <Route path="driver-approvals" element={<DriverApprovalsPage />} />
               <Route path="reviews" element={<ReviewsPage />} />
               <Route path="notifications" element={<NotificationsPage />} />

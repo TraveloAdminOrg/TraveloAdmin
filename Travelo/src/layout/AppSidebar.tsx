@@ -12,6 +12,7 @@ import {
   Bell,
   Megaphone,
   ShieldCheck,
+  Siren,
   Route as RouteIcon,
   BarChart3,
   LayoutDashboard,
@@ -25,16 +26,17 @@ import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../context/AuthContext";
 import { useReportOverviewQuery } from "../hooks/queries/useReports";
 import { useActiveDispatchRidesQuery } from "../hooks/queries/useDispatch";
+import { useSos } from "../context/SosContext";
 
 const FALLBACK_AVATAR = "/images/user/owner.jpg";
 
-type Tone = "brand" | "warning" | "success" | "neutral";
+type Tone = "brand" | "warning" | "success" | "neutral" | "error";
 
 interface NavItem {
   name: string;
   icon: React.ReactNode;
   path: string;
-  badgeKey?: "pendingApprovals" | "activeRides";
+  badgeKey?: "pendingApprovals" | "activeRides" | "activeSos";
   badgeTone?: Tone;
 }
 
@@ -68,6 +70,13 @@ const NAV_GROUPS: NavGroup[] = [
         path: "/driver-approvals",
         badgeKey: "pendingApprovals",
         badgeTone: "warning",
+      },
+      {
+        name: "Emergency SOS",
+        icon: <Siren size={20} />,
+        path: "/sos",
+        badgeKey: "activeSos",
+        badgeTone: "error",
       },
     ],
   },
@@ -146,6 +155,7 @@ const TONE_BADGE: Record<Tone, string> = {
   success:
     "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400",
   neutral: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
+  error: "bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-400",
 };
 
 const AppSidebar: React.FC = () => {
@@ -168,9 +178,14 @@ const AppSidebar: React.FC = () => {
     [location.pathname],
   );
 
+  // Live, socket-driven: an unanswered emergency shows a count here even if the
+  // operator dismissed the overlay or is on another page.
+  const { queue, activeSession } = useSos();
+
   const badges: Record<NonNullable<NavItem["badgeKey"]>, number> = {
     pendingApprovals: overviewQ.data?.pendingApprovals ?? 0,
     activeRides: activeRidesQ.data?.length ?? 0,
+    activeSos: queue.length + (activeSession ? 1 : 0),
   };
 
   const adminName = (admin?.email ?? "").split("@")[0] || "Admin";
@@ -314,11 +329,13 @@ const AppSidebar: React.FC = () => {
                         {collapsed && badge > 0 && (
                           <span
                             className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full ${
-                              item.badgeTone === "warning"
-                                ? "bg-warning-500"
-                                : item.badgeTone === "success"
-                                  ? "bg-success-500"
-                                  : "bg-brand-500"
+                              item.badgeTone === "error"
+                                ? "bg-error-500"
+                                : item.badgeTone === "warning"
+                                  ? "bg-warning-500"
+                                  : item.badgeTone === "success"
+                                    ? "bg-success-500"
+                                    : "bg-brand-500"
                             } ring-2 ring-white dark:ring-gray-900`}
                           />
                         )}

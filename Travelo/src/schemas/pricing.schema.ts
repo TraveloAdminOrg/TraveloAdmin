@@ -23,7 +23,8 @@ export const weeklyFareEntrySchema = z.object({
     .max(10, "Surge cannot exceed 10×"),
 });
 
-export const pricingRideTypeSchema = z.object({
+export const pricingFormSchema = z.object({
+  region: z.string({ message: "Select a region" }).min(1, "Select a region"),
   rideType: z
     .string({ message: "Select a ride type" })
     .min(1, "Select a ride type"),
@@ -38,23 +39,5 @@ export const pricingRideTypeSchema = z.object({
       { message: "Weekly fare must cover days 0–6 exactly once each" },
     ),
 });
-
-export const pricingFormSchema = z
-  .object({
-    region: z.string({ message: "Select a region" }).min(1, "Select a region"),
-    rideTypes: z
-      .array(pricingRideTypeSchema)
-      .min(1, "Add at least one ride type"),
-  })
-  .refine(
-    (data) => {
-      const ids = data.rideTypes.map((r) => r.rideType);
-      return new Set(ids).size === ids.length;
-    },
-    {
-      message: "Each ride type can only appear once",
-      path: ["rideTypes"],
-    },
-  );
 
 export type PricingFormInput = z.infer<typeof pricingFormSchema>;

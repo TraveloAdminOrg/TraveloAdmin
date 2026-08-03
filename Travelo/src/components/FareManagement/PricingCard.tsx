@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
-import type { Pricing, WeeklyFareEntry } from "../../types/pricing";
+import type { Pricing, PricingRegion, WeeklyFareEntry } from "../../types/pricing";
 import { formatCurrency, formatDate } from "../../lib/format";
 import { refId, refTitle, regionDisplayName } from "../../lib/refs";
 import {
@@ -12,7 +12,9 @@ import {
 } from "../../lib/pricing";
 
 interface Props {
-  pricing: Pricing;
+  region: PricingRegion | string;
+  // Every fare record priced for this region — one per ride type.
+  records: Pricing[];
   rideTypeNames: Map<string, string>; // rideType _id -> title
   regionNameById?: Map<string, string>; // region _id -> country name (fallback when region is just an id)
   onEdit: (p: Pricing) => void;
@@ -20,18 +22,20 @@ interface Props {
 }
 
 export default function PricingCard({
-  pricing,
+  region,
+  records,
   rideTypeNames,
   regionNameById,
   onEdit,
   onDelete,
 }: Props) {
-  // Track which ride-type rows are expanded to show their per-day breakdown.
+  // Track which rows are expanded to show their per-day breakdown.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const regionObj = typeof pricing.region === "string" ? null : pricing.region;
+  const regionObj = typeof region === "string" ? null : region;
   const regionCode = regionObj?.code ?? "";
-  const regionName = regionDisplayName(pricing.region, regionNameById);
+  const regionName = regionDisplayName(region, regionNameById);
+  const currency = records[0]?.currency ?? "";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition hover:shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
@@ -48,43 +52,19 @@ export default function PricingCard({
               </span>
             )}
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-              {pricing.currency}
+              {currency}
             </span>
-            {pricing.rideTypes.length > 0 && (
+            {records.length > 0 && (
               <span className="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-medium text-success-700 dark:bg-success-500/10 dark:text-success-400">
-                {pricing.rideTypes.length} ride type
-                {pricing.rideTypes.length === 1 ? "" : "s"}
+                {records.length} ride type
+                {records.length === 1 ? "" : "s"}
               </span>
             )}
           </div>
-          {pricing.updatedAt && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Last updated {formatDate(pricing.updatedAt)}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onEdit(pricing)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-          >
-            <Pencil className="size-3.5" />
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(pricing)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-error-500 transition hover:bg-error-50 dark:hover:bg-error-500/10"
-          >
-            <Trash2 className="size-3.5" />
-            Delete
-          </button>
         </div>
       </div>
 
-      {/* Ride types pricing table */}
+      {/* Ride types pricing table — each row is its own independent fare record */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-white/[0.02] dark:text-gray-400">
@@ -96,26 +76,51 @@ export default function PricingCard({
                   {f.label}
                 </th>
               ))}
+              <th className="px-4 py-2 font-medium">Updated</th>
+              <th className="px-4 py-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {pricing.rideTypes.length === 0 ? (
+            {records.length === 0 ? (
               <tr>
                 <td
-                  colSpan={2 + FARE_FIELDS.length}
+                  colSpan={4 + FARE_FIELDS.length}
                   className="px-4 py-6 text-center text-gray-500 dark:text-gray-400"
                 >
                   No ride types configured.
                 </td>
               </tr>
             ) : (
-              pricing.rideTypes.map((rt, idx) => {
-                const id = refId(rt.rideType);
-                const title = refTitle(rt.rideType) ?? rideTypeNames.get(id);
-                const uniform = collapseUniform(rt.weeklyFare);
-                const rowKey = `${id}-${idx}`;
+              records.map((record) => {
+                const id = refId(record.rideType);
+                const title = refTitle(record.rideType) ?? rideTypeNames.get(id);
+                const uniform = collapseUniform(record.weeklyFare);
+                const rowKey = record._id;
                 const isOpen = expanded[rowKey] ?? false;
-                const week = normaliseWeek(rt.weeklyFare);
+                const week = normaliseWeek(record.weeklyFare);
+
+                const actions = (
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(record)}
+                        aria-label="Edit"
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(record)}
+                        aria-label="Delete"
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-error-500 transition hover:bg-error-50 dark:hover:bg-error-500/10"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                );
 
                 if (uniform) {
                   return (
@@ -133,7 +138,11 @@ export default function PricingCard({
                       <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400">
                         All days
                       </td>
-                      <FareCells row={uniform} currency={pricing.currency} />
+                      <FareCells row={uniform} currency={currency} />
+                      <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                        {record.updatedAt ? formatDate(record.updatedAt) : "—"}
+                      </td>
+                      {actions}
                     </tr>
                   );
                 }
@@ -169,9 +178,13 @@ export default function PricingCard({
                         className="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400"
                       >
                         {/* Range hint so admins see the spread without expanding */}
-                        Base {minMax(week, "baseFare", pricing.currency)} · Per
-                        km {minMax(week, "pricePerKm", pricing.currency)}
+                        Base {minMax(week, "baseFare", currency)} · Per km{" "}
+                        {minMax(week, "pricePerKm", currency)}
                       </td>
+                      <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400">
+                        {record.updatedAt ? formatDate(record.updatedAt) : "—"}
+                      </td>
+                      {actions}
                     </tr>
                     {isOpen &&
                       week.map((d) => {
@@ -196,7 +209,9 @@ export default function PricingCard({
                                 </span>
                               )}
                             </td>
-                            <FareCells row={d} currency={pricing.currency} />
+                            <FareCells row={d} currency={currency} />
+                            <td />
+                            <td />
                           </tr>
                         );
                       })}
