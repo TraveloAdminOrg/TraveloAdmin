@@ -16,7 +16,7 @@ import {
 import { useRideTypesQuery } from "../../hooks/queries/useRideTypes";
 import { useRegionsQuery } from "../../hooks/queries/useRegions";
 import { getErrorMessage, isNotFoundError } from "../../lib/error";
-import { regionRefId, regionDisplayName } from "../../lib/refs";
+import { refId, regionRefId, regionDisplayName } from "../../lib/refs";
 import type { Pricing } from "../../types/pricing";
 
 type TabValue = "ALL" | string; // "ALL" or a region _id
@@ -56,14 +56,52 @@ export default function FareManagementPage() {
 
   const pricings = useMemo(() => data ?? [], [data]);
 
-  // The backend allows exactly one fare document per region ("Fare already
-  // exists" on a second POST). Adding a ride type to an already-priced region
-  // means editing that region's fare, not creating another one — so these
-  // regions are offered for edit but not for create.
-  const pricedRegionIds = useMemo(
-    () => new Set(pricings.map((p) => regionRefId(p.region))),
-    [pricings],
+  // Each (region, rideType) pair is its own independent fare record. Group
+  // them by region purely for display — one card per region, listing every
+  // ride type priced there.
+  const groupedByRegion = useMemo(() => {
+    const map = new Map<string, Pricing[]>();
+    pricings.forEach((p) => {
+      const regionId = regionRefId(p.region);
+      map.set(regionId, [...(map.get(regionId) ?? []), p]);
+    });
+    return map;
+  }, [pricings]);
+
+  // Which ride types (by id) already have a fare record for each region —
+  // this is what lets Create Pricing add a never-before-priced ride type to
+  // a region that already has other ride types priced.
+  const existingRideTypeIdsByRegion = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    groupedByRegion.forEach((records, regionId) => {
+      map.set(
+        regionId,
+        new Set(records.map((r) => refId(r.rideType)).filter(Boolean)),
+      );
+    });
+    return map;
+  }, [groupedByRegion]);
+
+  const allRideTypes = useMemo(
+    () => rideTypesData?.rideTypes ?? [],
+    [rideTypesData],
   );
+
+  // A region is fully priced only once every active ride type allowed in
+  // that region already has a fare entry there — not merely "has a fare doc."
+  const fullyPricedRegionIds = useMemo(() => {
+    const result = new Set<string>();
+    regions.forEach((region) => {
+      const applicable = allRideTypes.filter(
+        (rt) => rt.isActive && rt.allowedRegions.includes(region._id),
+      );
+      const priced = existingRideTypeIdsByRegion.get(region._id) ?? new Set();
+      if (applicable.every((rt) => priced.has(rt._id))) {
+        result.add(region._id);
+      }
+    });
+    return result;
+  }, [regions, allRideTypes, existingRideTypeIdsByRegion]);
 
   // Build tabs from fetched regions so they reflect what's actually configured
   // in the backend, not a hardcoded list.
@@ -75,26 +113,27 @@ export default function FareManagementPage() {
     [regions],
   );
 
-  const filtered = useMemo(
-    () =>
-      activeTab === "ALL"
-        ? pricings
-        : pricings.filter((p) => regionRefId(p.region) === activeTab),
-    [pricings, activeTab],
-  );
+  // One page item per region card, not per fare record.
+  const filteredGroups = useMemo(() => {
+    const entries = Array.from(groupedByRegion.entries());
+    return activeTab === "ALL"
+      ? entries
+      : entries.filter(([regionId]) => regionId === activeTab);
+  }, [groupedByRegion, activeTab]);
 
-  // Counts are global now — `filtered` spans every record, not just one page.
+  // Counts are global now — every ride type priced for a region counts, so the
+  // badge reflects ride-type coverage, not just "does this region have a fare."
   const tabCount = (value: TabValue) =>
     value === "ALL"
       ? pricings.length
       : pricings.filter((p) => regionRefId(p.region) === value).length;
 
-  const total = filtered.length;
+  const total = filteredGroups.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const paged = useMemo(
-    () => filtered.slice((currentPage - 1) * limit, currentPage * limit),
-    [filtered, currentPage, limit],
+    () => filteredGroups.slice((currentPage - 1) * limit, currentPage * limit),
+    [filteredGroups, currentPage, limit],
   );
 
   // Reset to page 1 when tab changes.
@@ -147,13 +186,14 @@ export default function FareManagementPage() {
 
   // Only pre-select the active region if it can actually be created.
   const defaultRegionIdForCreate =
-    activeTab !== "ALL" && !pricedRegionIds.has(activeTab)
+    activeTab !== "ALL" && !fullyPricedRegionIds.has(activeTab)
       ? activeTab
       : undefined;
 
-  // Nothing left to create once every region has a fare.
+  // Nothing left to create once every region is fully priced.
   const allRegionsPriced =
-    regions.length > 0 && regions.every((r) => pricedRegionIds.has(r._id));
+    regions.length > 0 &&
+    regions.every((r) => fullyPricedRegionIds.has(r._id));
 
   return (
     <>
@@ -258,10 +298,11 @@ export default function FareManagementPage() {
           <div
             className={`space-y-4 ${isFetching ? "opacity-70 transition" : ""}`}
           >
-            {paged.map((p) => (
+            {paged.map(([regionId, records]) => (
               <PricingCard
-                key={p._id}
-                pricing={p}
+                key={regionId}
+                region={records[0].region}
+                records={records}
                 rideTypeNames={rideTypeNames}
                 regionNameById={regionNameById}
                 onEdit={openEdit}
@@ -294,7 +335,8 @@ export default function FareManagementPage() {
         onClose={closeForm}
         pricing={editing}
         defaultRegionId={defaultRegionIdForCreate}
-        pricedRegionIds={pricedRegionIds}
+        existingRideTypeIdsByRegion={existingRideTypeIdsByRegion}
+        fullyPricedRegionIds={fullyPricedRegionIds}
       />
 
       <DeleteConfirmDialog

@@ -17,6 +17,7 @@ const NAV_TARGETS: NavTarget[] = [
   { path: "/rides", label: "Rides", keywords: ["trips"] },
   { path: "/driver-tables", label: "Drivers" },
   { path: "/driver-approvals", label: "Driver Approvals", keywords: ["approve"] },
+  { path: "/sos", label: "Emergency SOS", keywords: ["emergency", "panic", "help", "sos"] },
   { path: "/basic-tables", label: "Users", keywords: ["riders"] },
   { path: "/transaction-history", label: "Payments & Transactions", keywords: ["money", "refund"] },
   { path: "/reviews", label: "Reviews & Ratings" },

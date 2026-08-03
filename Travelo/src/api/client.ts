@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { authStorage } from "../lib/auth";
+import { reconnectSocket } from "../lib/socket";
 import { ENDPOINTS } from "./endpoints";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -50,6 +51,9 @@ async function tryRefresh(): Promise<string | null> {
     const { accessToken, refreshToken: newRefresh } = res.data.data;
     authStorage.setToken(accessToken);
     if (newRefresh) authStorage.setRefreshToken(newRefresh);
+    // The live socket's handshake still carries the old token — reconnect it
+    // now, otherwise it keeps retrying forever against a rejected handshake.
+    reconnectSocket();
     return accessToken;
   } catch {
     return null;

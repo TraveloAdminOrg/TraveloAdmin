@@ -39,35 +39,28 @@ export interface PricingRideTypeRef {
   updatedAt?: string;
 }
 
-export interface PricingRideType {
-  // Populated on GET, a bare _id on write responses, and null once the
-  // underlying ride type has been deleted.
-  rideType: PricingRideTypeRef | string | null;
-  weeklyFare: WeeklyFareEntry[];
-}
-
+// Each (region, rideType) pair is its own independent fare record.
 export interface Pricing {
   _id: string;
   // GET responses populate the region object; POST/PATCH responses return just the id.
   region: PricingRegion | string;
+  // Populated on GET, a bare _id on write responses, and null once the
+  // underlying ride type has been deleted.
+  rideType: PricingRideTypeRef | string | null;
   currency: string;
-  rideTypes: PricingRideType[];
+  weeklyFare: WeeklyFareEntry[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-// Write payloads — IDs only. The backend derives `currency` from the region.
-export interface FareRideTypeInput {
-  rideType: string;
-  weeklyFare: WeeklyFareEntry[];
-}
-
+// Write payload for create — IDs only. The backend derives `currency` from the region.
+// Region and ride type are immutable once created (delete and recreate to change either).
 export type PricingCreateInput = {
   region: string; // region _id
-  // Optional on create (backend derives from region) but accepted on update —
-  // included here so the form can echo the resolved value back to the server.
-  currency?: string;
-  rideTypes: FareRideTypeInput[];
+  rideType: string; // rideType _id
+  weeklyFare: WeeklyFareEntry[];
 };
 
-export type PricingUpdateInput = Partial<PricingCreateInput>;
+export type PricingUpdateInput = {
+  weeklyFare: WeeklyFareEntry[];
+};
