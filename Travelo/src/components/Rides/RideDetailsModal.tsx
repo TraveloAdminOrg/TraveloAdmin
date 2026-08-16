@@ -1,7 +1,14 @@
+import { useState } from "react";
+import { toast } from "sonner";
 import { Modal } from "../ui/modal";
+import Button from "../ui/button/Button";
 import LoadingSpinner from "../common/LoadingSpinner";
 import RideStatusBadge from "./RideStatusBadge";
-import { useRideQuery } from "../../hooks/queries/useRides";
+import CancelRideDialog from "./CancelRideDialog";
+import {
+  useForceCancelRideMutation,
+  useRideQuery,
+} from "../../hooks/queries/useRides";
 import { formatCurrency, formatDateTime } from "../../lib/format";
 import { getErrorMessage } from "../../lib/error";
 import type { RidePerson, RideRideTypeRef } from "../../types/ride";
@@ -21,6 +28,22 @@ const personName = (p: RidePerson | string | null | undefined): string => {
 // something, mirroring the rider's bill and the driver's summary exactly.
 export default function RideDetailsModal({ rideId, onClose }: Props) {
   const { data: ride, isLoading, error } = useRideQuery(rideId ?? "");
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const cancelMutation = useForceCancelRideMutation();
+
+  const confirmCancel = async (reason: string) => {
+    if (!ride) return;
+    try {
+      await cancelMutation.mutateAsync({
+        id: ride._id,
+        cancellationReason: reason || undefined,
+      });
+      toast.success("Ride force-cancelled");
+      setIsCancelDialogOpen(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  };
 
   const receipt = ride?.receipt;
   const currency = receipt?.currency || ride?.currency || "USD";
@@ -68,118 +91,140 @@ export default function RideDetailsModal({ rideId, onClose }: Props) {
   }
 
   return (
-    <Modal
-      isOpen={!!rideId}
-      onClose={onClose}
-      className="max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
-    >
-      <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-        Ride Details
-      </h2>
+    <>
+      <Modal
+        isOpen={!!rideId}
+        onClose={onClose}
+        className="max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Ride Details
+          </h2>
+          {ride && !ride.isCompleted && !ride.isCancelled && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setIsCancelDialogOpen(true)}
+              className="!border-error-300 !text-error-600 hover:!bg-error-50 dark:!border-error-800 dark:!text-error-400"
+            >
+              Force-Cancel
+            </Button>
+          )}
+        </div>
 
-      {isLoading ? (
-        <LoadingSpinner label="Loading ride…" />
-      ) : error ? (
-        <p className="text-sm text-error-500">{getErrorMessage(error)}</p>
-      ) : !ride ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Ride not found.
-        </p>
-      ) : (
-        <div className="space-y-5">
-          {/* Summary */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Rider</p>
-              <p className="font-medium text-gray-800 dark:text-white/90">
-                {personName(ride.userId)}
-              </p>
+        {isLoading ? (
+          <LoadingSpinner label="Loading ride…" />
+        ) : error ? (
+          <p className="text-sm text-error-500">{getErrorMessage(error)}</p>
+        ) : !ride ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Ride not found.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {/* Summary */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Rider</p>
+                <p className="font-medium text-gray-800 dark:text-white/90">
+                  {personName(ride.userId)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Driver</p>
+                <p className="font-medium text-gray-800 dark:text-white/90">
+                  {personName(ride.driverId)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Ride type
+                </p>
+                <p className="font-medium capitalize text-gray-800 dark:text-white/90">
+                  {typeof ride.rideType === "object" && ride.rideType
+                    ? (ride.rideType as RideRideTypeRef).title
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                <RideStatusBadge status={ride.status} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Payment
+                </p>
+                <p className="font-medium capitalize text-gray-800 dark:text-white/90">
+                  {ride.paymentMethod} · {ride.paymentStatus}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Completed
+                </p>
+                <p className="font-medium text-gray-800 dark:text-white/90">
+                  {ride.completedAt ? formatDateTime(ride.completedAt) : "—"}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Driver</p>
-              <p className="font-medium text-gray-800 dark:text-white/90">
-                {personName(ride.driverId)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Ride type
-              </p>
-              <p className="font-medium capitalize text-gray-800 dark:text-white/90">
-                {typeof ride.rideType === "object" && ride.rideType
-                  ? (ride.rideType as RideRideTypeRef).title
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
-              <RideStatusBadge status={ride.status} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Payment
-              </p>
-              <p className="font-medium capitalize text-gray-800 dark:text-white/90">
-                {ride.paymentMethod} · {ride.paymentStatus}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Completed
-              </p>
-              <p className="font-medium text-gray-800 dark:text-white/90">
-                {ride.completedAt ? formatDateTime(ride.completedAt) : "—"}
-              </p>
-            </div>
-          </div>
 
-          {/* Charge breakdown */}
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-800">
-            <p className="border-b border-gray-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:text-gray-400">
-              Charge Breakdown
-            </p>
-            {receipt ? (
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                {lines.map((line) => (
-                  <div
-                    key={line.label}
-                    className="flex items-center justify-between px-4 py-2 text-sm"
-                  >
-                    <span className="text-gray-600 dark:text-gray-300">
-                      {line.label}
+            {/* Charge breakdown */}
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800">
+              <p className="border-b border-gray-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                Charge Breakdown
+              </p>
+              {receipt ? (
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {lines.map((line) => (
+                    <div
+                      key={line.label}
+                      className="flex items-center justify-between px-4 py-2 text-sm"
+                    >
+                      <span className="text-gray-600 dark:text-gray-300">
+                        {line.label}
+                      </span>
+                      <span className="tabular-nums text-gray-800 dark:text-white/90">
+                        {money(line.amount)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-4 py-2.5 text-sm font-semibold">
+                    <span className="text-gray-800 dark:text-white/90">
+                      Total
                     </span>
                     <span className="tabular-nums text-gray-800 dark:text-white/90">
-                      {money(line.amount)}
+                      {money(
+                        receipt.total ??
+                          (Number(receipt.subtotal ?? 0) +
+                            Number(receipt.tip ?? 0)),
+                      )}
                     </span>
                   </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-2.5 text-sm font-semibold">
-                  <span className="text-gray-800 dark:text-white/90">
-                    Total
+                </div>
+              ) : (
+                // Pre-completion (or pre-feature) rides have no settled receipt.
+                <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {ride.isCompleted ? "Fare" : "Estimated fare"}
                   </span>
                   <span className="tabular-nums text-gray-800 dark:text-white/90">
-                    {money(
-                      receipt.total ??
-                        (Number(receipt.subtotal ?? 0) +
-                          Number(receipt.tip ?? 0)),
-                    )}
+                    {money(ride.fare ?? ride.estimatedFare)}
                   </span>
                 </div>
-              </div>
-            ) : (
-              // Pre-completion (or pre-feature) rides have no settled receipt.
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="text-gray-600 dark:text-gray-300">
-                  {ride.isCompleted ? "Fare" : "Estimated fare"}
-                </span>
-                <span className="tabular-nums text-gray-800 dark:text-white/90">
-                  {money(ride.fare ?? ride.estimatedFare)}
-                </span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </Modal>
+        )}
+      </Modal>
+
+      <CancelRideDialog
+        isOpen={isCancelDialogOpen}
+        isLoading={cancelMutation.isPending}
+        onConfirm={confirmCancel}
+        onClose={() => setIsCancelDialogOpen(false)}
+      />
+    </>
   );
 }
