@@ -32,6 +32,7 @@ export const ENDPOINTS = {
     active: "/admin/rides/active",
     byUser: (userId: string) => `/admin/rides/by-user/${userId}`,
     byDriver: (driverId: string) => `/admin/rides/by-driver/${driverId}`,
+    cancel: (id: string) => `/admin/rides/${id}/cancel`,
   },
   payments: {
     base: "/admin/transactions/",

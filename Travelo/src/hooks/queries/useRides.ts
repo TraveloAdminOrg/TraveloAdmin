@@ -1,4 +1,9 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ridesApi, type RidesListParams } from "../../api/rides.api";
 import type { PaginationParams } from "../../types/api";
 
@@ -56,3 +61,21 @@ export const useActiveRidesQuery = (refetchMs = 15_000) =>
     queryFn: ridesApi.active,
     refetchInterval: refetchMs,
   });
+
+export const useForceCancelRideMutation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      cancellationReason,
+    }: {
+      id: string;
+      cancellationReason?: string;
+    }) => ridesApi.cancel(id, cancellationReason),
+    onSuccess: (_id, { id }) => {
+      qc.invalidateQueries({ queryKey: rideKeys.lists() });
+      qc.invalidateQueries({ queryKey: rideKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: rideKeys.active() });
+    },
+  });
+};

@@ -78,4 +78,14 @@ export const ridesApi = {
         rides: r.data.data.rides ?? [],
         meta: r.data.data.meta,
       })),
+
+  // Force-cancels a ride regardless of status (started/waiting/etc) — the
+  // recovery path for rides abandoned mid-flow that the normal rider/driver
+  // cancel endpoint can no longer touch.
+  cancel: (id: string, cancellationReason?: string) =>
+    apiClient
+      .post<ApiResponse<{ id: string }>>(ENDPOINTS.rides.cancel(id), {
+        cancellationReason,
+      })
+      .then((r) => r.data.data.id),
 };
