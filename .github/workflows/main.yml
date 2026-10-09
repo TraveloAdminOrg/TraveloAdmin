@@ -34,11 +34,11 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: eu-west-1
 
       - name: Set environment vars
         run: |
-          echo "S3_BUCKET=fe-travelo-app" >> $GITHUB_ENV
+          echo "S3_BUCKET=travelo-new-admin" >> $GITHUB_ENV
         #  echo "CF_DIST_ID=E2OT941MRDL1BB" >> $GITHUB_ENV
       - name: Create .env file from example
         working-directory: Travelo
